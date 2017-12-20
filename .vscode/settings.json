@@ -1,0 +1,6 @@
+{
+  "files.associations": {
+    "opts.h": "c",
+    "uv.h": "c"
+  }
+}
