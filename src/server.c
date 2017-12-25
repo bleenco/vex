@@ -1,185 +1,153 @@
-#include "defs.h"
-#include <netinet/in.h> /* INET6_ADDRSTRLEN */
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <libgen.h>
+#include <netdb.h>
+#include <resolv.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <syslog.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
-#ifndef INET6_ADDRSTRLEN
-#define INET6_ADDRSTRLEN 63
-#endif
+#define BUF_SIZE 1024
 
-typedef struct
+#define READ 0
+#define WRITE 1
+
+typedef enum {TRUE = 1, FALSE = 0} bool;
+
+int create_socket(int port);
+void handle_client(int client_sock, struct sockaddr_in client_addr);
+void copy_data(int source_sock, int destination_sock);
+int create_connection();
+
+int server_sock, client_sock, remote_sock, remote_port = 0;
+char *bind_addr, *remote_host, *cmd_in, *cmd_out;
+
+int
+main(int argc, char *argv[])
 {
-  uv_getaddrinfo_t getaddrinfo_req;
-  server_config config;
-  server_ctx *servers;
-  uv_loop_t *loop;
-} server_state;
+  int local_port = 10000, client_sock;
+  struct sockaddr_in client_addr;
+  socklen_t addrlen = sizeof(client_addr);
 
-static void do_bind(uv_getaddrinfo_t *req, int status, struct addrinfo *ai);
-static void on_connection(uv_stream_t *server, int status);
+  remote_host = "0.0.0.0";
+  remote_port = 6500;
 
-int server_run(const server_config *cfg, uv_loop_t *loop)
-{
-  struct addrinfo hints;
-  server_state state;
-  int err;
+  server_sock = create_socket(local_port);
 
-  memset(&state, 0, sizeof(state));
-  state.servers = NULL;
-  state.config = *cfg;
-  state.loop = loop;
-
-  memset(&hints, 0, sizeof(hints));
-  hints.ai_family = AF_UNSPEC;
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_protocol = IPPROTO_TCP;
-
-  /* Resolve the address of the interface that we should bind to.
-   * The getaddrinfo callback starts the server and everything else.
-   */
-  err = uv_getaddrinfo(loop, &state.getaddrinfo_req, do_bind, cfg->bind_host, NULL, &hints);
-  if (err != 0)
-  {
-    pr_err("getaddrinfo: %s", uv_strerror(err));
-    return err;
+  while (1) {
+    client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &addrlen);
+    handle_client(client_sock, client_addr);
+    close(client_sock);
   }
 
-  /* Start the event loop. Control continues in do_bind(). */
-  if (uv_run(loop, UV_RUN_DEFAULT))
-  {
-    abort();
-  }
-
-  uv_loop_delete(loop);
-  free(state.servers);
   return 0;
 }
 
-/* Bind a server to each address that getaddrinfo() reported. */
-static void do_bind(uv_getaddrinfo_t *req, int status, struct addrinfo *addrs)
+int
+create_socket(int port)
 {
-  char addrbuf[INET6_ADDRSTRLEN + 1];
-  unsigned int ipv4_naddrs;
-  unsigned int ipv6_naddrs;
-  server_state *state;
-  server_config *cfg;
-  struct addrinfo *ai;
-  const void *addrv;
-  const char *what;
-  uv_loop_t *loop;
-  server_ctx *sx;
-  unsigned int n;
-  int err;
-  union {
-    struct sockaddr addr;
-    struct sockaddr_in addr4;
-    struct sockaddr_in6 addr6;
-  } s;
+  int server_sock, optval = 1;
+  struct sockaddr_in server_addr;
 
-  state = CONTAINER_OF(req, server_state, getaddrinfo_req);
-  loop = state->loop;
-  cfg = &state->config;
-
-  if (status < 0)
-  {
-    pr_err("getaddrinfo(\"%s\"): %s", cfg->bind_host, uv_strerror(status));
-    uv_freeaddrinfo(addrs);
-    return;
+  if ((server_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    exit(1);
   }
 
-  ipv4_naddrs = 0;
-  ipv6_naddrs = 0;
-  for (ai = addrs; ai != NULL; ai = ai->ai_next)
-  {
-    if (ai->ai_family == AF_INET)
-    {
-      ipv4_naddrs += 1;
-    }
-    else if (ai->ai_family == AF_INET6)
-    {
-      ipv6_naddrs += 1;
-    }
+  if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+    exit(1);
   }
 
-  if (ipv4_naddrs == 0 && ipv6_naddrs == 0)
+  memset(&server_addr, 0, sizeof(server_addr));
+  server_addr.sin_family = AF_INET;
+  server_addr.sin_port = htons(port);
+  server_addr.sin_addr.s_addr = INADDR_ANY;
+
+  if (bind(server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) != 0)
   {
-    pr_err("%s has no IPv4/6 addresses", cfg->bind_host);
-    uv_freeaddrinfo(addrs);
-    return;
+    exit(1);
   }
 
-  state->servers = xmalloc((ipv4_naddrs + ipv6_naddrs) * sizeof(state->servers[0]));
-
-  n = 0;
-  for (ai = addrs; ai != NULL; ai = ai->ai_next)
+  if (listen(server_sock, 128) < 0)
   {
-    if (ai->ai_family != AF_INET && ai->ai_family != AF_INET6)
-    {
-      continue;
-    }
-
-    if (ai->ai_family == AF_INET)
-    {
-      s.addr4 = *(const struct sockaddr_in *) ai->ai_addr;
-      s.addr4.sin_port = htons(cfg->bind_port);
-      addrv = &s.addr4.sin_addr;
-    }
-    else if (ai->ai_family == AF_INET6)
-    {
-      s.addr6 = *(const struct sockaddr_in6 *) ai->ai_addr;
-      s.addr6.sin6_port = htons(cfg->bind_port);
-      addrv = &s.addr6.sin6_addr;
-    }
-    else
-    {
-      UNREACHABLE();
-    }
-
-    if (uv_inet_ntop(s.addr.sa_family, addrv, addrbuf, sizeof(addrbuf)))
-    {
-      UNREACHABLE();
-    }
-
-    sx = state->servers + n;
-    sx->loop = loop;
-    sx->idle_timeout = state->config.idle_timeout;
-    CHECK(0 == uv_tcp_init(loop, &sx->tcp_handle));
-
-    what = "uv_tcp_bind";
-    err = uv_tcp_bind(&sx->tcp_handle, &s.addr, 0);
-    if (err == 0)
-    {
-      what = "uv_listen";
-      err = uv_listen((uv_stream_t *) &sx->tcp_handle, 128, on_connection);
-    }
-
-    if (err != 0)
-    {
-      pr_err("%s(\"%s:%hu\"): %s", what, addrbuf, cfg->bind_port, uv_strerror(err));
-      while (n > 0)
-      {
-        n -= 1;
-        uv_close((uv_handle_t *) (state->servers + n), NULL);
-      }
-      break;
-    }
-
-    pr_info("listening on %s:%hu", addrbuf, cfg->bind_port);
-    n += 1;
+    exit(1);
   }
 
-  uv_freeaddrinfo(addrs);
+  return server_sock;
 }
 
-static void on_connection(uv_stream_t *server, int status)
+void
+handle_client(int client_sock, struct sockaddr_in client_addr)
 {
-  server_ctx *sx;
-  client_ctx *cx;
+  if ((remote_sock = create_connection()) < 0) {
+    goto cleanup;
+  }
 
-  CHECK(status == 0);
-  sx = CONTAINER_OF(server, server_ctx, tcp_handle);
-  cx = xmalloc(sizeof(*cx));
-  CHECK(0 == uv_tcp_init(sx->loop, &cx->incoming.handle.tcp));
-  CHECK(0 == uv_accept(server, &cx->incoming.handle.stream));
-  // client_finish_init(sx, cx);
+  if (fork() == 0) {
+    copy_data(client_sock, remote_sock);
+    exit(0);
+  }
+
+  if (fork() == 0) {
+    copy_data(remote_sock, client_sock);
+    exit(0);
+  }
+
+cleanup:
+  close(remote_sock);
+  close(client_sock);
+}
+
+void
+copy_data(int source_sock, int destination_sock)
+{
+  ssize_t n;
+  char buf[BUF_SIZE];
+
+  while ((n = recv(source_sock, buf, BUF_SIZE, 0)) > 0) {
+    send(destination_sock, buf, n, 0);
+  }
+
+  if (n < 0) {
+    exit(1);
+  }
+
+  shutdown(destination_sock, SHUT_RDWR);
+  close(destination_sock);
+
+  shutdown(source_sock, SHUT_RDWR);
+  close(source_sock);
+}
+
+int
+create_connection()
+{
+  struct sockaddr_in server_addr;
+  struct hostent *server;
+  int sock;
+
+  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    return 1;
+  }
+
+  if ((server = gethostbyname(remote_host)) == NULL) {
+    return 1;
+  }
+
+  memset(&server_addr, 0, sizeof(server_addr));
+  server_addr.sin_family = AF_INET;
+  memcpy(&server_addr.sin_addr.s_addr, server->h_addr, server->h_length);
+  server_addr.sin_port = htons(remote_port);
+
+  if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+    return 1;
+  }
+
+  return sock;
 }

@@ -1,6 +1,13 @@
 {
   "files.associations": {
     "opts.h": "c",
-    "uv.h": "c"
+    "uv.h": "c",
+    "ios": "c",
+    "locale": "c",
+    "string": "c",
+    "ostream": "c",
+    "iterator": "c",
+    "memory": "c",
+    "__locale": "c"
   }
 }
