@@ -1,23 +1,22 @@
-TARGET = build/vex
-LIBS = -lm
-CC = gcc
-CFLAGS = -g -Wall -I include
+TARGET_SERVER = build/vex-server
+TARGET_CLIENT = build/vex
+CC = cc
+CFLAGS = -O2 -std=c99 -Wall -I include
+DEPS = build/utils.o
 
-.PHONY: default recompile checkdir clean
+.PHONY: all client server checkdir clean
 
-default: checkdir $(TARGET)
-recompile: clean default
+all: checkdir client server
+recompile: clean checkdir client server
 
-OBJECTS = $(subst src/,build/,$(subst .c,.o, $(wildcard src/*.c)))
-HEADERS = $(wildcard include/*.h)
+client: utils.o
+	$(CC) $(CFLAGS) $(DEPS) -o ${TARGET_CLIENT} src/client.c
 
-build/%.o: src/%.c $(HEADERS)
-	$(CC) $(CFLAGS) -c $< -o $@
+server: utils.o
+	$(CC) $(CFLAGS) $(DEPS) -o ${TARGET_SERVER} src/server.c
 
-.PRECIOUS: $(TARGET) $(OBJECTS)
-
-$(TARGET): $(OBJECTS)
-	$(CC) -Wall $(OBJECTS) $(LIBS) -o $@
+utils.o: checkdir
+	$(CC) -Wall -I include -c src/utils.c -o build/utils.o
 
 checkdir:
 	@mkdir -p build

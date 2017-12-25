@@ -14,20 +14,16 @@
 #include <unistd.h>
 #include <sys/wait.h>
 
-#define BUF_SIZE 1024
-
-#define READ 0
-#define WRITE 1
-
-typedef enum {TRUE = 1, FALSE = 0} bool;
+#include <utils.h>
 
 int create_socket(int port);
 void handle_client(int client_sock, struct sockaddr_in client_addr);
 void copy_data(int source_sock, int destination_sock);
 int create_connection();
+char *rand_string(int len);
 
 int server_sock, client_sock, remote_sock, remote_port = 0;
-char *bind_addr, *remote_host, *cmd_in, *cmd_out;
+char *bind_addr, *remote_host;
 
 int
 main(int argc, char *argv[])
@@ -40,6 +36,10 @@ main(int argc, char *argv[])
   remote_port = 6500;
 
   server_sock = create_socket(local_port);
+
+  char *test = rand_string(5);
+
+  printf("%s\n", test);
 
   while (1) {
     client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &addrlen);
