@@ -20,6 +20,7 @@ typedef struct {
   int remote_conn;
   int local_conn;
   int in_use;
+  int is_done;
 } tunnel_t;
 
 typedef struct {
@@ -32,8 +33,8 @@ void *handle_client(void *client_sock);
 int init_client(int client_sock, client_t *client);
 int get_unused_conn_id(tunnel_t connections[]);
 
-int server_sock, client_sock, remote_sock, remote_port = 0;
-char *bind_addr, *remote_host;
+int server_sock, client_sock, remote_sock;
+char *bind_addr;
 
 client_t client;
 
@@ -43,9 +44,6 @@ main(int argc, char *argv[])
   int local_port = 5000, client_sock;
   struct sockaddr_in client_addr;
   socklen_t addrlen = sizeof(client_addr);
-
-  remote_host = "0.0.0.0";
-  remote_port = 6500;
 
   server_sock = create_socket(local_port);
   pthread_t thread_id;
@@ -64,7 +62,6 @@ void
 *handle_client(void *client_sock)
 {
   int sock = *(int *)client_sock;
-  printf("client connected, id: %s\n", client.id);
 
   if (client.id) {
     int id;
@@ -81,12 +78,8 @@ void
       }
     }
 
-    printf("ID: %d\n", id);
-
-    // if (pthread_join(thread_id, NULL)) {
-    //   printf("error joining thread.\n");
-    //   return 0;
-    // }
+    printf("handle client connection done (%d).\n", id);
+    client.connections[id].is_done = 1;
   } else {
     ssize_t n;
     char buf[BUF_SIZE];
@@ -108,9 +101,10 @@ void
         }
       }
     }
+
+    printf("handle client done.\n");
   }
 
-  printf("handle client done.\n");
   return 0;
 }
 
