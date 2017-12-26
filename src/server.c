@@ -33,7 +33,7 @@ void *handle_client(void *client_sock);
 int init_client(int client_sock, client_t *client);
 int get_unused_conn_id(tunnel_t connections[]);
 
-int server_sock, client_sock, remote_sock;
+int server_sock;
 char *bind_addr;
 
 client_t client;
@@ -65,21 +65,25 @@ void
 
   if (client.id) {
     int id;
-    pthread_t thread_id;
-    struct transfer_args args;
 
     if ((id = get_unused_conn_id(client.connections)) >= 0) {
+      pthread_t thread_id;
+      struct transfer_args args;
+
       client.connections[id].in_use = 1;
       client.connections[id].local_conn = sock;
       args.source_sock = client.connections[id].local_conn;
       args.destination_sock = client.connections[id].remote_conn;
+
       if (pthread_create(&thread_id, NULL, &handle_transfer, (void *)&args) < 0) {
         printf("error creating thread.\n");
       }
+      pthread_detach(thread_id);
+
+      client.connections[id].is_done = 1;
     }
 
     printf("handle client connection done (%d).\n", id);
-    client.connections[id].is_done = 1;
   } else {
     ssize_t n;
     char buf[BUF_SIZE];
@@ -132,7 +136,7 @@ init_client(int client_sock, client_t *client)
   strncat(resp, " ", 1);
   strncat(resp, max_connections, strlen(max_connections));
 
-  writen(client_sock, resp, strlen(resp));
+  write(client_sock, resp, strlen(resp));
 
   client->id = id;
 
@@ -172,7 +176,7 @@ create_socket(int port)
 int
 get_unused_conn_id(tunnel_t connections[])
 {
-  int len = 10;
+  int len = sizeof(client.connections) / (4 * sizeof(int));
   for (int i = 0; i < len; i++) {
     if (connections[i].in_use == 0) {
       return i;

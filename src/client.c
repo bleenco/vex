@@ -25,13 +25,14 @@ typedef struct {
 } client_t;
 
 int create_connection(char *remote_host, int remote_port);
+void create_tunnel(int index, char *remote_host, int remote_port, char *local_host, int local_port);
+
+client_t client;
 
 int
 main(int argc, char *argv[])
 {
   int remote_sock;
-
-  client_t client;
 
   client.remote_host = "0.0.0.0";
   client.remote_port = 5000;
@@ -41,7 +42,7 @@ main(int argc, char *argv[])
   remote_sock = create_connection(client.remote_host, client.remote_port);
 
   char buf[BUF_SIZE] = "[vex_client_init]";
-  writen(remote_sock, buf, strlen(buf));
+  write(remote_sock, buf, strlen(buf));
   memset(buf, 0, BUF_SIZE);
 
   while (1) {
@@ -59,30 +60,14 @@ main(int argc, char *argv[])
         char delimit[] = " ";
         strtok(buf, delimit);
         char *id = strtok(NULL, delimit);
-        char *port = strtok(NULL, delimit);
+        char *portch = strtok(NULL, delimit);
         char *maxconn = strtok(NULL, delimit);
+        int port = atoi(portch);
 
         client.id = id;
 
         for (int i = 0; i < atoi(maxconn); i++) {
-          tunnel_t tunnel;
-          pthread_t thread_id;
-          struct transfer_args args;
-
-          int remote_conn = create_connection(client.remote_host, atoi(port));
-          int local_conn = create_connection(client.local_host, client.local_port);
-
-          tunnel.remote_conn = remote_conn;
-          tunnel.local_conn = local_conn;
-          tunnel.in_use = 0;
-          client.connections[i] = tunnel;
-
-          args.source_sock = remote_conn;
-          args.destination_sock = local_conn;
-
-          if (pthread_create(&thread_id, NULL, &handle_transfer, (void *)&args) < 0) {
-            printf("error creating thread.\n");
-          }
+          create_tunnel(i, client.remote_host, port, client.local_host, client.local_port);
         }
       }
     }
@@ -118,4 +103,27 @@ create_connection(char *remote_host, int remote_port)
   }
 
   return sock;
+}
+
+void
+create_tunnel(int index, char *remote_host, int remote_port, char *local_host, int local_port)
+{
+  tunnel_t tunnel;
+  pthread_t thread_id;
+  struct transfer_args args;
+
+  int remote_conn = create_connection(remote_host, remote_port);
+  int local_conn = create_connection(local_host, local_port);
+
+  tunnel.remote_conn = remote_conn;
+  tunnel.local_conn = local_conn;
+  tunnel.in_use = 0;
+  client.connections[index] = tunnel;
+
+  args.source_sock = remote_conn;
+  args.destination_sock = local_conn;
+
+  if (pthread_create(&thread_id, NULL, &handle_transfer, (void *)&args) < 0) {
+    printf("error creating thread.\n");
+  }
 }
