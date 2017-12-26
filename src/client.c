@@ -1,3 +1,4 @@
+#include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -6,8 +7,7 @@
 #include <netdb.h>
 #include <resolv.h>
 #include <unistd.h>
-
-#include "utils.h"
+#include <pthread.h>
 
 typedef struct {
   int remote_conn;
@@ -25,7 +25,6 @@ typedef struct {
 } client_t;
 
 int create_connection(char *remote_host, int remote_port);
-void handle_transfer(int source_sock, int destination_sock);
 
 int
 main(int argc, char *argv[])
@@ -67,6 +66,9 @@ main(int argc, char *argv[])
 
         for (int i = 0; i < atoi(maxconn); i++) {
           tunnel_t tunnel;
+          pthread_t thread_id;
+          struct transfer_args args;
+
           int remote_conn = create_connection(client.remote_host, atoi(port));
           int local_conn = create_connection(client.local_host, client.local_port);
 
@@ -74,7 +76,13 @@ main(int argc, char *argv[])
           tunnel.local_conn = local_conn;
           tunnel.in_use = 0;
           client.connections[i] = tunnel;
-          handle_transfer(client.connections[i].remote_conn, client.connections[i].local_conn);
+
+          args.source_sock = remote_conn;
+          args.destination_sock = local_conn;
+
+          if (pthread_create(&thread_id, NULL, &handle_transfer, (void *)&args) < 0) {
+            printf("error creating thread.\n");
+          }
         }
       }
     }

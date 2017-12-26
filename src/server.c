@@ -1,3 +1,4 @@
+#include <utils.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,8 +16,6 @@
 #include <sys/wait.h>
 #include <pthread.h>
 
-#include <utils.h>
-
 typedef struct {
   int remote_conn;
   int local_conn;
@@ -30,14 +29,13 @@ typedef struct {
 
 int create_socket(int port);
 void *handle_client(void *client_sock);
-int handle_new_client(int client_sock, client_t *client);
-int create_connection();
+int init_client(int client_sock, client_t *client);
+int get_unused_conn_id(tunnel_t connections[]);
 
 int server_sock, client_sock, remote_sock, remote_port = 0;
 char *bind_addr, *remote_host;
 
 client_t client;
-int x = 0;
 
 int
 main(int argc, char *argv[])
@@ -52,8 +50,7 @@ main(int argc, char *argv[])
   server_sock = create_socket(local_port);
   pthread_t thread_id;
 
-  while (1) {
-    client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &addrlen);
+  while ((client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &addrlen))) {
     if (pthread_create(&thread_id, NULL, handle_client, (void *)&client_sock) < 0) {
       printf("could not create thread.\n");
       return 1;
@@ -67,112 +64,58 @@ void
 *handle_client(void *client_sock)
 {
   int sock = *(int *)client_sock;
-  printf("client connected.\n");
-  printf("%s\n", client.id);
+  printf("client connected, id: %s\n", client.id);
 
   if (client.id) {
-    client.connections[x].local_conn = sock;
-    client.connections[x].in_use = 1;
-    handle_transfer(client.connections[x].local_conn, client.connections[x].remote_conn);
-    x++;
+    int id;
+    pthread_t thread_id;
+    struct transfer_args args;
+
+    if ((id = get_unused_conn_id(client.connections)) >= 0) {
+      client.connections[id].in_use = 1;
+      client.connections[id].local_conn = sock;
+      args.source_sock = client.connections[id].local_conn;
+      args.destination_sock = client.connections[id].remote_conn;
+      if (pthread_create(&thread_id, NULL, &handle_transfer, (void *)&args) < 0) {
+        printf("error creating thread.\n");
+      }
+    }
+
+    printf("ID: %d\n", id);
+
+    // if (pthread_join(thread_id, NULL)) {
+    //   printf("error joining thread.\n");
+    //   return 0;
+    // }
   } else {
+    ssize_t n;
     char buf[BUF_SIZE];
 
-    while (1) {
-      ssize_t n = recv(sock, buf, BUF_SIZE, 0);
-      if (n == -1) {
-        printf("recv failed\n");
-        exit(1);
-      }
-      if (n == 0) {
-        printf("read done.\n");
-        break;
-      }
-      if (n > 0) {
-        if (strstr(buf, "[vex_client_init]")) {
-          int remote_conn, i = 0;
-          struct sockaddr_in remote_addr;
-          socklen_t remote_addrlen = sizeof(remote_addr);
-          int server_sock = handle_new_client(sock, &client);
+    while ((n = recv(sock, buf, BUF_SIZE, 0)) > 0) {
+      if (strstr(buf, "[vex_client_init]")) {
+        int remote_conn, i = 0;
+        struct sockaddr_in remote_addr;
+        socklen_t remote_addrlen = sizeof(remote_addr);
+        int server_sock = init_client(sock, &client);
 
-          while (1) {
-            remote_conn = accept(server_sock, (struct sockaddr *)&remote_addr, &remote_addrlen);
-
-            tunnel_t tunnel;
-            tunnel.remote_conn = remote_conn;
-            tunnel.in_use = 0;
-            client.connections[i] = tunnel;
-            i++;
-
-            if (fork() == 0) {
-              printf("new connection established.\n");
-              close(server_sock);
-
-              char buf[BUF_SIZE];
-              while (1) {
-                ssize_t n = readn(remote_conn, buf, strlen(buf));
-                if (n < 0) {
-                  printf("read error.\n");
-                  break;
-                }
-                if (n == 0) {
-                  printf("read done.\n");
-                  break;
-                }
-                if (n > 0) {
-                  printf("%s\n", buf);
-                }
-              }
-
-              exit(0);
-            }
-          }
+        while ((remote_conn = accept(server_sock, (struct sockaddr *)&remote_addr, &remote_addrlen))) {
+          tunnel_t tunnel;
+          tunnel.remote_conn = remote_conn;
+          tunnel.in_use = 0;
+          client.connections[i] = tunnel;
+          printf("new tunnel established %d.\n", i);
+          i++;
         }
       }
     }
   }
 
   printf("handle client done.\n");
-
-  // char resp[100] = "[vex_data]: ";
-  // char *id = rand_string(8);
-  // strncat(resp, id, strlen(id));
-  //
-  // int client_server_sock = create_socket_for_client();
-  // struct sockaddr_in sin;
-  // socklen_t len = sizeof(sin);
-  // if (getsockname(client_server_sock, (struct sockaddr *)&sin, &len) == -1) {
-  //   exit(1);
-  // }
-  // char client_server_port[10], resp_port[30] = " ";
-  // sprintf(client_server_port, "%d", ntohs(sin.sin_port));
-  // strncat(resp_port, client_server_port, strlen(client_server_port));
-  //
-  // strncat(resp, resp_port, strlen(resp_port));
-  // writen(client_sock, resp, strlen(resp));
-
-//   if ((remote_sock = create_connection()) < 0) {
-//     goto cleanup;
-//   }
-//
-//   if (fork() == 0) {
-//     transfer(client_sock, remote_sock);
-//     exit(0);
-//   }
-//
-//   if (fork() == 0) {
-//     transfer(remote_sock, client_sock);
-//     exit(0);
-//   }
-//
-// cleanup:
-//   close(remote_sock);
-//   close(client_sock);
   return 0;
 }
 
 int
-handle_new_client(int client_sock, client_t *client)
+init_client(int client_sock, client_t *client)
 {
   char *id = rand_string(8);
   int server_sock = create_socket(0), maxconn = 10;
@@ -233,28 +176,13 @@ create_socket(int port)
 }
 
 int
-create_connection()
+get_unused_conn_id(tunnel_t connections[])
 {
-  struct sockaddr_in server_addr;
-  struct hostent *server;
-  int sock;
-
-  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    return 1;
+  int len = 10;
+  for (int i = 0; i < len; i++) {
+    if (connections[i].in_use == 0) {
+      return i;
+    }
   }
-
-  if ((server = gethostbyname(remote_host)) == NULL) {
-    return 1;
-  }
-
-  memset(&server_addr, 0, sizeof(server_addr));
-  server_addr.sin_family = AF_INET;
-  memcpy(&server_addr.sin_addr.s_addr, server->h_addr, server->h_length);
-  server_addr.sin_port = htons(remote_port);
-
-  if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-    return 1;
-  }
-
-  return sock;
+  return -1;
 }

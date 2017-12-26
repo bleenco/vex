@@ -5,9 +5,10 @@
 #include <resolv.h>
 #include <unistd.h>
 #include <errno.h>
+#include <pthread.h>
 
-char *
-rand_string(int len)
+char
+*rand_string(int len)
 {
   int i, x;
   char *dst = malloc(sizeof(char) * len);
@@ -25,40 +26,50 @@ rand_string(int len)
 }
 
 void
-transfer(int source_sock, int destination_sock)
+*transfer(void *arguments)
 {
+  struct transfer_args *args = arguments;
   ssize_t n;
   char buf[BUF_SIZE];
 
-  while ((n = recv(source_sock, buf, BUF_SIZE, 0)) > 0) {
-    send(destination_sock, buf, n, 0);
+  while ((n = recv(args->source_sock, buf, BUF_SIZE, 0)) > 0) {
+    send(args->destination_sock, buf, n, 0);
   }
 
-  if (n < 0) {
-    exit(1);
-  }
+  shutdown(args->destination_sock, SHUT_RDWR);
+  close(args->destination_sock);
 
-  shutdown(destination_sock, SHUT_RDWR);
-  close(destination_sock);
+  shutdown(args->source_sock, SHUT_RDWR);
+  close(args->source_sock);
 
-  shutdown(source_sock, SHUT_RDWR);
-  close(source_sock);
+  return 0;
 }
 
 void
-handle_transfer(int source_sock, int destination_sock)
+*handle_transfer(void *arguments)
 {
-  printf("%d %d\n", source_sock, destination_sock);
+  struct transfer_args *args = arguments;
+  struct transfer_args args_in, args_out;
+  pthread_t thread_in, thread_out;
 
-  if (fork() == 0) {
-    transfer(source_sock, destination_sock);
-    exit(0);
+  args_in.source_sock = args->source_sock;
+  args_in.destination_sock = args->destination_sock;
+  args_out.source_sock = args->destination_sock;
+  args_out.destination_sock = args->source_sock;
+
+  if (pthread_create(&thread_in, NULL, &transfer, (void *)&args_in) < 0) {
+    printf("error creating thread.\n");
   }
 
-  if (fork() == 0) {
-    transfer(destination_sock, source_sock);
-    exit(0);
+  if (pthread_create(&thread_out, NULL, &transfer, (void *)&args_out) < 0) {
+    printf("error creating thread.\n");
   }
+
+  if (pthread_join(thread_in, NULL) || pthread_join(thread_out, NULL)) {
+    printf("error joining thread.\n");
+  }
+
+  return 0;
 }
 
 ssize_t
