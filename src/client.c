@@ -33,47 +33,43 @@ int
 main(int argc, char *argv[])
 {
   int remote_sock;
+  ssize_t n;
 
-  client.remote_host = "0.0.0.0";
+  client.remote_host = "33412dea.jan";
   client.remote_port = 5000;
   client.local_host = "localhost";
-  client.local_port = 6500;
+  client.local_port = 6510;
 
   remote_sock = create_connection(client.remote_host, client.remote_port);
 
   char buf[BUF_SIZE] = "[vex_client_init]";
   write(remote_sock, buf, strlen(buf));
   memset(buf, 0, BUF_SIZE);
+  int port;
 
-  while (1) {
-    ssize_t n = recv(remote_sock, buf, BUF_SIZE, 0);
-    if (n == -1) {
-      printf("recv failed\n");
-      exit(1);
-    }
-    if (n == 0) {
-      printf("read done.\n");
-      break;
-    }
-    if (n > 0) {
-      if (strstr(buf, "[vex_data]")) {
-        char delimit[] = " ";
-        strtok(buf, delimit);
-        char *id = strtok(NULL, delimit);
-        char *portch = strtok(NULL, delimit);
-        char *maxconn = strtok(NULL, delimit);
-        int port = atoi(portch);
+  while ((n = read(remote_sock, buf, BUF_SIZE)) > 0) {
+    if (strstr(buf, "[vex_data]")) {
+      char delimit[] = " ";
+      strtok(buf, delimit);
+      char *id = strtok(NULL, delimit);
+      char *portch = strtok(NULL, delimit);
+      // char *maxconn = strtok(NULL, delimit);
+      // port = atoi(portch);
+      port = 5000;
+      client.id = id;
 
-        client.id = id;
+      memset(buf, 0, BUF_SIZE);
 
-        for (int i = 0; i < atoi(maxconn); i++) {
-          create_tunnel(i, client.remote_host, port, client.local_host, client.local_port);
-        }
-      }
+      // for (int i = 0; i < atoi(maxconn); i++) {
+      //   create_tunnel(i, client.remote_host, port, client.local_host, client.local_port);
+      // }
+    } else if (strstr(buf, "[vex_tunnel]")) {
+      create_tunnel(0, client.remote_host, port, client.local_host, client.local_port);
+      memset(buf, 0, BUF_SIZE);
     }
   }
 
-  printf("Halo!\n");
+  printf("Bye!\n");
   return 0;
 }
 
@@ -108,6 +104,7 @@ create_connection(char *remote_host, int remote_port)
 void
 create_tunnel(int index, char *remote_host, int remote_port, char *local_host, int local_port)
 {
+  printf("creating tunnel...\n");
   tunnel_t tunnel;
   pthread_t thread_id;
   struct transfer_args args;
@@ -117,7 +114,6 @@ create_tunnel(int index, char *remote_host, int remote_port, char *local_host, i
 
   tunnel.remote_conn = remote_conn;
   tunnel.local_conn = local_conn;
-  tunnel.in_use = 0;
   client.connections[index] = tunnel;
 
   args.source_sock = remote_conn;
