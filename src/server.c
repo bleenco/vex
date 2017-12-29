@@ -26,6 +26,8 @@ typedef struct {
   char *id;
   int main_conn;
   char buf[BUF_SIZE];
+  int ready;
+  int next_tunnel_id;
   tunnel_t *connections[];
 } client_t;
 
@@ -39,9 +41,7 @@ typedef struct {
 int create_socket(int port);
 void *handle_client(void *client_sock);
 void init_client(int client_sock, client_t *client);
-void init_tunnel(int remote_conn, client_t *client, int i);
-int get_free_tunnel_id(client_t *client);
-int get_dead_tunnel_id(client_t *client);
+void init_tunnel(int remote_conn, client_t *client);
 
 server_t server;
 
@@ -74,7 +74,6 @@ main(int argc, char *argv[])
   return 0;
 }
 
-int inited = 0;
 
 void
 *handle_client(void *client_sock)
@@ -84,10 +83,12 @@ void
   client_t *client = NULL;
   ssize_t n;
 
-  if (inited == 1) {
-    client = server.clients[0];
-    int id = 0;
+
+  if ((client = server.clients[0]) != NULL && client->ready == 1) {
+    int id = client->next_tunnel_id;
+    printf("%d\n", id);
     client->connections[id]->tunnel_conn = sock;
+    client->ready = 0;
 
     struct transfer_args args;
     args.source_sock = client->connections[id]->tunnel_conn;
@@ -100,83 +101,29 @@ void
     pthread_detach(tid);
 
     send(client->connections[id]->tunnel_conn, client->buf, strlen(client->buf), 0);
-  } else {
-    if ((n = recv(sock, buf, BUF_SIZE, 0)) > 0) {
-      if (strncmp(buf, "[vex_client_init]", 17) == 0) { // new client connected
-        client_t *client = malloc(sizeof(client_t));
-        init_client(sock, client);
-        char log[100];
-        sprintf(log, "client (%s) initialized\n", client->id);
-        print_info(log);
-      } else if (strstr(buf, "HTTP") != NULL) {
-        printf("DA!\n");
-        host = extract_text(buf, "Host:", "\r\n");
-        subdomain = extract_text(host, " ", ".");
-
-        client = server.clients[0];
-        int id = 0;
-        strcpy(client->buf, buf);
-        client->connections[id]->http_conn = sock;
-
-        char *initbuf = "[vex_tunnel]";
-        send(client->main_conn, initbuf, strlen(initbuf), 0);
-        inited = 1;
-      } else {
-        printf("TO TI JE ELSE\n");
-      }
-    }
+    return 0;
   }
 
+  if ((n = recv(sock, buf, BUF_SIZE, 0)) > 0) {
+    if (strncmp(buf, "[vex_client_init]", 17) == 0) { // new client connected
+      client_t *client = malloc(sizeof(client_t));
+      init_client(sock, client);
+      char log[100];
+      sprintf(log, "client (%s) initialized\n", client->id);
+      print_info(log);
+    } else if (strstr(buf, "HTTP") != NULL && client != NULL && client->ready == 0) {
+      host = extract_text(buf, "Host:", "\r\n");
+      subdomain = extract_text(host, " ", ".");
 
+      client = server.clients[0];
+      init_tunnel(sock, client);
+      strcpy(client->buf, buf);
+      client->ready = 1;
 
-  // while ((n = recv(sock, buf, BUF_SIZE, 0)) > 0) {
-  //   if (strncmp(buf, "[vex_client_init]", 17) == 0) { // new client connected
-  //     client_t *client = malloc(sizeof(client_t));
-  //     int remote_conn;
-  //     struct sockaddr_in remote_addr;
-  //     socklen_t remote_addrlen = sizeof(remote_addr);
-  //     init_client(sock, client);
-  //     char log[100];
-  //     sprintf(log, "client (%s) initialized\n", client->id);
-  //     print_info(log);
-  //     client_conn = sock;
-  //
-  //     // while ((remote_conn = accept(server_sock, (struct sockaddr *)&remote_addr, &remote_addrlen))) {
-  //     //   if (client != NULL) {
-  //     //     int i = get_dead_tunnel_id(client);
-  //     //     init_tunnel(remote_conn, client, i);
-  //     //   }
-  //     // }
-  //   } else {
-  //     if (client == NULL && tunnel == NULL && strstr(buf, "HTTP") != NULL) {
-  //       // host = extract_text(buf, "Host:", "\r\n");
-  //       // subdomain = extract_text(host, " ", ".");
-  //       //
-  //       // if (server.clients[0] == NULL) {
-  //       //   return 0;
-  //       // }
-  //       //
-  //       // client = server.clients[0];
-  //       // int tunnel_id = get_free_tunnel_id(client);
-  //       //
-  //       // client->connections[tunnel_id]->local_conn = sock;
-  //       // client->connections[tunnel_id]->status = 1;
-  //       // tunnel = client->connections[tunnel_id];
-  //       //
-  //       // struct transfer_args args;
-  //       // pthread_t tid;
-  //       //
-  //       // args.source_sock = tunnel->remote_conn;
-  //       // args.destination_sock = tunnel->local_conn;
-  //       //
-  //       // if (pthread_create(&tid, NULL, &transfer, (void *)&args) < 0) {
-  //       //   printf("error creating thread.\n");
-  //       // }
-  //     }
-  //
-  //     // write(tunnel->remote_conn, buf, n);
-  //   }
-  // }
+      char *initbuf = "[vex_tunnel]";
+      send(client->main_conn, initbuf, strlen(initbuf), 0);
+    }
+  }
 
   return 0;
 }
@@ -185,50 +132,26 @@ void
 init_client(int client_sock, client_t *client)
 {
   char *id = rand_string(8);
-  // int server_sock = create_socket(0), maxconn = 10;
-  // char client_server_port[7], max_connections[3];
-  //
-  // struct sockaddr_in sin;
-  // socklen_t len = sizeof(sin);
-  //
-  // if (getsockname(server_sock, (struct sockaddr *)&sin, &len) == -1) {
-  //   exit(1);
-  // }
-  //
-  // sprintf(client_server_port, "%d", ntohs(sin.sin_port));
-  // sprintf(max_connections, "%d", maxconn);
-
   char resp[100] = "[vex_data]: ";
   strncat(resp, id, strlen(id));
-  // strncat(resp, " ", 1);
-  // strncat(resp, client_server_port, strlen(client_server_port));
-  // strncat(resp, " ", 1);
-  // strncat(resp, max_connections, strlen(max_connections));
-
   write(client_sock, resp, strlen(resp));
 
   client->id = id;
   client->main_conn = client_sock;
-
-  for (int i = 0; i < server.tunnels_num; i++) {
-    client->connections[i] = malloc(sizeof(tunnel_t));
-    client->connections[i]->http_conn = -1;
-    client->connections[i]->tunnel_conn = -1;
-    client->connections[i]->status = -1;
-  }
-
+  client->ready = 0;
+  client->next_tunnel_id = -1;
   server.clients[0] = client;
 }
 
 void
-init_tunnel(int remote_conn, client_t *client, int i)
+init_tunnel(int remote_conn, client_t *client)
 {
+  client->next_tunnel_id++;
   tunnel_t *tunnel = malloc(sizeof(tunnel_t));
-  tunnel->tunnel_conn = remote_conn;
-  tunnel->status = 0;
-  client->connections[i] = tunnel;
+  tunnel->http_conn = remote_conn;
+  client->connections[client->next_tunnel_id] = tunnel;
   char log[100];
-  sprintf(log, "new tunnel established (%d)\n", i);
+  sprintf(log, "new tunnel established (%d)\n", client->next_tunnel_id);
   print_info(log);
 }
 
@@ -260,30 +183,4 @@ create_socket(int port)
   }
 
   return server_sock;
-}
-
-int
-get_free_tunnel_id(client_t *client)
-{
-  for (int i = 0; i < server.tunnels_num; i++) {
-    if (client->connections[i]->status == 0) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-int
-get_dead_tunnel_id(client_t *client)
-{
-  for (int i = 0; i < server.tunnels_num; i++) {
-    if (client->connections[i] == NULL) {
-      return i;
-    }
-
-    if (client->connections[i]->status == -1) {
-      return i;
-    }
-  }
-  return -1;
 }

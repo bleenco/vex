@@ -52,17 +52,9 @@ main(int argc, char *argv[])
       char delimit[] = " ";
       strtok(buf, delimit);
       char *id = strtok(NULL, delimit);
-      char *portch = strtok(NULL, delimit);
-      // char *maxconn = strtok(NULL, delimit);
-      // port = atoi(portch);
       port = 5000;
       client.id = id;
-
       memset(buf, 0, BUF_SIZE);
-
-      // for (int i = 0; i < atoi(maxconn); i++) {
-      //   create_tunnel(i, client.remote_host, port, client.local_host, client.local_port);
-      // }
     } else if (strstr(buf, "[vex_tunnel]")) {
       create_tunnel(0, client.remote_host, port, client.local_host, client.local_port);
       memset(buf, 0, BUF_SIZE);
