@@ -47,12 +47,15 @@ main(int argc, char **argv)
   print_info(log);
 
   char buf[BUF_SIZE] = "[vex_client_init]";
+  char *reqid = (!strncmp(client.id, "", strlen(client.id))) ? "random" : client.id;
+  strncat(buf, " ", 1);
+  strncat(buf, reqid, strlen(client.id));
+  strncat(buf, " ", 1);
   write(remote_sock, buf, strlen(buf));
   memset(buf, 0, BUF_SIZE);
 
   while ((n = read(remote_sock, buf, BUF_SIZE)) > 0) {
     if (strstr(buf, "[vex_data]")) {
-      printf("%s\n", buf);
       char delimit[] = " ";
       strtok(buf, delimit);
       char *id = strtok(NULL, delimit);

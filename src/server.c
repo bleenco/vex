@@ -23,7 +23,7 @@ typedef struct {
 } tunnel_t;
 
 typedef struct {
-  char id[20];
+  char id[50];
   int main_conn;
   char buf[BUF_SIZE];
   int ready;
@@ -47,7 +47,7 @@ struct handle_args {
 
 int create_socket(int port);
 void *handle_client(void *client_sock);
-void init_client(int client_sock, client_t *client);
+void init_client(int client_sock, client_t *client, char *reqid);
 void init_tunnel(int remote_conn, client_t *client, conn_info_t conn_info);
 void *read_head(void *arguments);
 void parse_args(int argc, char **argv);
@@ -144,8 +144,11 @@ void
 
   if ((n = recv(sock, buf, BUF_SIZE, 0)) > 0) {
     if (strncmp(buf, "[vex_client_init]", 17) == 0) { // new client connected
+      char delimit[] = " ";
+      strtok(buf, delimit);
+      char *reqid = strtok(NULL, delimit);
       client_t *client = malloc(sizeof(client_t));
-      init_client(sock, client);
+      init_client(sock, client, reqid);
       char log[100];
       sprintf(log, "client (%s) initialized\n", client->id);
       print_info(log);
@@ -168,9 +171,14 @@ void
 }
 
 void
-init_client(int client_sock, client_t *client)
+init_client(int client_sock, client_t *client, char *reqid)
 {
-  char *id = rand_string(8);
+  char id[50];
+  if (!strncmp(reqid, "random", strlen(reqid))) {
+    strcpy(id, rand_string(8));
+  } else {
+    strcpy(id, reqid);
+  }
 
   strcpy(client->id, id);
   client->main_conn = client_sock;
