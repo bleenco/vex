@@ -16,8 +16,9 @@ struct conn_args {
 struct transfer_args {
   int source_sock;
   int destination_sock;
-  char *id;
-  int conn_index;
+  char id[20];
+  int data_in;
+  int verbose;
 };
 
 typedef struct {
@@ -31,3 +32,4 @@ void *handle_transfer(void *arguments);
 conn_info_t get_conn_info(struct sockaddr_in *addr);
 void print_info(char *msg);
 char *extract_text(char *text, char *pattern1, char *pattern2);
+char *readable_fs(double size, char *buf);

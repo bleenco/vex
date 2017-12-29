@@ -38,7 +38,7 @@ main(int argc, char *argv[])
   client.remote_host = "33412dea.jan";
   client.remote_port = 5000;
   client.local_host = "localhost";
-  client.local_port = 6510;
+  client.local_port = 6500;
 
   remote_sock = create_connection(client.remote_host, client.remote_port);
 

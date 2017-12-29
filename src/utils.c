@@ -26,9 +26,11 @@ void
 {
   struct transfer_args *args = arguments;
   ssize_t n;
-  char buf[BUF_SIZE];
+  double total = 0;
+  char buf[BUF_SIZE], size[10];
 
   while ((n = recv(args->source_sock, buf, BUF_SIZE, 0)) > 0) {
+    total += n;
     send(args->destination_sock, buf, n, 0);
   }
 
@@ -37,6 +39,11 @@ void
 
   shutdown(args->source_sock, SHUT_RDWR);
   close(args->source_sock);
+
+  char *in_out = (args->data_in == 1) ? "in" : "out";
+  char log[200];
+  sprintf(log, "(%s) data transfered %s - %s\n", args->id, in_out, readable_fs(total, size));
+  print_info(log);
 
   return 0;
 }
@@ -51,8 +58,12 @@ void
 
   args_in.source_sock = args->source_sock;
   args_in.destination_sock = args->destination_sock;
+  args_in.data_in = 1;
+  strcpy(args_in.id, args->id);
   args_out.source_sock = args->destination_sock;
   args_out.destination_sock = args->source_sock;
+  args_out.data_in = 0;
+  strcpy(args_out.id, args->id);
 
   if (pthread_create(&tid[0], NULL, transfer, (void *)&args_in) < 0) {
     printf("error creating thread.\n");
@@ -109,4 +120,16 @@ char
   }
 
   return target;
+}
+
+char
+*readable_fs(double size, char *buf) {
+  int i = 0;
+  const char* units[] = {"B", "kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"};
+  while (size > 1024) {
+    size /= 1024;
+    i++;
+  }
+  sprintf(buf, "%.*f%s", i, size, units[i]);
+  return buf;
 }
