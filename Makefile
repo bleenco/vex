@@ -4,7 +4,7 @@ CC = cc
 CFLAGS = -O2 -std=c99 -Wall -I include -lm -pthread
 DEPS = build/utils.o
 
-.PHONY: all client server checkdir clean
+.PHONY: all client server checkdir clean image
 
 all: checkdir client server
 recompile: clean checkdir client server
@@ -23,3 +23,6 @@ checkdir:
 
 clean:
 	@rm -rf build/
+
+image:
+	docker build -t vex .

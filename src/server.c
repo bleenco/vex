@@ -190,6 +190,10 @@ void
       char delimit[] = " ";
       strtok(buf, delimit);
       char *reqid = strtok(NULL, delimit);
+      if (reqid == NULL) {
+        reqid = "";
+      }
+
       client_t *client = malloc(sizeof(client_t));
       init_client(sock, client, reqid);
       char log[100];
