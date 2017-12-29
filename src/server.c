@@ -300,7 +300,7 @@ init_tunnel(int remote_conn, client_t *client, conn_info_t conn_info)
 
   client->last_id = id;
 
-  char log[200];
+  char log[BUF_SIZE];
   sprintf(log, "(%s) new tunnel established - %s:%d <> %s:%d\n",
     client->id, server.conn_info.hostname, server.conn_info.port, conn_info.hostname, conn_info.port);
   print_info(log);
@@ -336,7 +336,7 @@ create_socket(int port)
   conn_info_t conn_info = get_conn_info(&server_addr);
   server.conn_info = conn_info;
 
-  char log[100];
+  char log[BUF_SIZE];
   sprintf(log, "server listening on %s:%d ...\n", conn_info.hostname, conn_info.port);
   print_info(log);
   sprintf(log, "domain configured to generate URLs at *.%s\n", server.domain);

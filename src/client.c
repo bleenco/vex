@@ -51,7 +51,9 @@ main(int argc, char **argv)
   strncat(buf, " ", 1);
   strncat(buf, reqid, strlen(client.id));
   strncat(buf, " ", 1);
-  write(remote_sock, buf, strlen(buf));
+  if ((n = write(remote_sock, buf, strlen(buf))) <= 0) {
+    printf("error writing to remote socket.\n");
+  }
   memset(buf, 0, BUF_SIZE);
 
   while ((n = read(remote_sock, buf, BUF_SIZE)) > 0) {

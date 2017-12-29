@@ -7,6 +7,7 @@
 #include <time.h>
 
 #define BUF_SIZE 256000
+#define h_addr h_addr_list[0]
 
 struct conn_args {
   int sock;
