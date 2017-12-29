@@ -29,6 +29,7 @@ typedef struct {
   int ready;
   int next_tunnel_id;
   int last_id;
+  int is_disconnected;
   tunnel_t *connections[];
 } client_t;
 
@@ -36,6 +37,8 @@ typedef struct {
   unsigned short local_port;
   int server_sock;
   char domain[100];
+  int num_clients;
+  int active_client_id;
   conn_info_t conn_info;
   client_t *clients[];
 } server_t;
@@ -45,12 +48,19 @@ struct handle_args {
   conn_info_t conn_info;
 };
 
+struct watch_args {
+  int sock;
+  client_t *client;
+};
+
 int create_socket(int port);
 void *handle_client(void *client_sock);
 void init_client(int client_sock, client_t *client, char *reqid);
 void init_tunnel(int remote_conn, client_t *client, conn_info_t conn_info);
+void *watch_client(void *arguments);
 void *read_head(void *arguments);
 void parse_args(int argc, char **argv);
+int get_client_id(char *subdomain);
 void print_help();
 
 server_t server;
@@ -66,6 +76,7 @@ main(int argc, char **argv)
   socklen_t addrlen = sizeof(client_addr);
 
   server.server_sock = create_socket(server.local_port);
+  server.num_clients = 0;
   pthread_mutex_init(&mutex_lock, NULL);
 
   while ((client_sock = accept(server.server_sock, (struct sockaddr *)&client_addr, &addrlen))) {
@@ -100,7 +111,7 @@ void
   hargs.sock = sock;
   hargs.conn_info = conn_info;
 
-  if ((client = server.clients[0]) != NULL && client->ready == 1) {
+  if ((client = server.clients[server.active_client_id]) != NULL && client->ready == 1) {
     pthread_mutex_unlock(&mutex_lock);
     client->ready = 0;
     int id = client->last_id;
@@ -133,6 +144,38 @@ void
 }
 
 void
+*watch_client(void *arguments)
+{
+  struct watch_args *args = arguments;
+  int main_sock = args->sock;
+  client_t *client = args->client;
+  ssize_t n;
+  char buf[BUF_SIZE];
+
+  while (1) {
+    n = recv(main_sock, buf, BUF_SIZE, 0);
+    if (n < 1) {
+      break;
+    }
+  }
+
+  shutdown(main_sock, SHUT_RDWR);
+  close(main_sock);
+
+  int id = get_client_id(client->id);
+  if (id != -1) {
+    server.clients[id]->is_disconnected = 1;
+  }
+  // memset(server.clients[id]->connections, 0, sizeof(tunnel_t));
+
+  char log[100];
+  sprintf(log, "(%s) client disconnected\n", client->id);
+  print_info(log);
+
+  return 0;
+}
+
+void
 *read_head(void *arguments)
 {
   struct handle_args *args = arguments;
@@ -152,12 +195,30 @@ void
       char log[100];
       sprintf(log, "client (%s) initialized\n", client->id);
       print_info(log);
+
+      pthread_t wtid;
+      struct watch_args wargs;
+      wargs.sock = client->main_conn;
+      wargs.client = client;
+
+      if (pthread_create(&wtid, NULL, watch_client, (void *)&wargs) < 0) {
+        printf("error creating thread.\n");
+      }
+      pthread_join(wtid, NULL);
+
+      return 0;
     } else {
       pthread_mutex_lock(&mutex_lock);
       host = extract_text(buf, "Host:", "\r\n");
       subdomain = extract_text(host, " ", ".");
+      int id = get_client_id(subdomain);
 
-      client = server.clients[0];
+      if (id == -1) {
+        return 0;
+      }
+
+      client = server.clients[id];
+      server.active_client_id = id;
       init_tunnel(sock, client, conn_info);
       strcpy(client->buf, buf);
 
@@ -184,7 +245,21 @@ init_client(int client_sock, client_t *client, char *reqid)
   client->main_conn = client_sock;
   client->ready = 0;
   client->next_tunnel_id = -1;
-  server.clients[0] = client;
+  client->is_disconnected = 0;
+
+  int num = server.num_clients;
+
+  for (int i = 0; i < num; i++) {
+    if (!strncmp(server.clients[i]->id, id, strlen(id)) || server.clients[i]->is_disconnected == 1) {
+      num = i;
+      break;
+    }
+  }
+
+  server.clients[num] = client;
+  if (num == server.num_clients) {
+    server.num_clients++;
+  }
 
   char resp[100] = "[vex_data]: ";
   strncat(resp, id, strlen(id));
@@ -197,6 +272,10 @@ init_client(int client_sock, client_t *client, char *reqid)
 void
 init_tunnel(int remote_conn, client_t *client, conn_info_t conn_info)
 {
+  if (client->is_disconnected == 1) {
+    return;
+  }
+
   int fid = -1, id;
   for (int i = 0; i < client->next_tunnel_id; i++) {
     tunnel_t *t = client->connections[i];
@@ -264,6 +343,18 @@ create_socket(int port)
   print_info(log);
 
   return server_sock;
+}
+
+int
+get_client_id(char *subdomain)
+{
+  int num = server.num_clients;
+  for (int i = 0; i < num; i++) {
+    if (!strncmp(server.clients[i]->id, subdomain, strlen(subdomain))) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 void
