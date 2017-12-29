@@ -6,7 +6,12 @@
 #include <netdb.h>
 #include <time.h>
 
-#define BUF_SIZE 4096
+#define BUF_SIZE 256000
+
+struct conn_args {
+  int sock;
+  struct sockaddr_in sockaddr;
+};
 
 struct transfer_args {
   int source_sock;
@@ -16,7 +21,7 @@ struct transfer_args {
 };
 
 typedef struct {
-  char *hostname;
+  char hostname[100];
   int port;
 } conn_info_t;
 

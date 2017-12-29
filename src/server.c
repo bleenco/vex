@@ -35,15 +35,17 @@ typedef struct {
   int local_port;
   int server_sock;
   int tunnels_num;
+  conn_info_t conn_info;
   client_t *clients[];
 } server_t;
 
 int create_socket(int port);
 void *handle_client(void *client_sock);
 void init_client(int client_sock, client_t *client);
-void init_tunnel(int remote_conn, client_t *client);
+void init_tunnel(int remote_conn, client_t *client, conn_info_t conn_info);
 
 server_t server;
+pthread_mutex_t mutex_lock;
 
 int
 main(int argc, char *argv[])
@@ -56,19 +58,19 @@ main(int argc, char *argv[])
   socklen_t addrlen = sizeof(client_addr);
 
   server.server_sock = create_socket(server.local_port);
+  pthread_mutex_init(&mutex_lock, NULL);
 
   while ((client_sock = accept(server.server_sock, (struct sockaddr *)&client_addr, &addrlen))) {
     pthread_t thread_id;
-    conn_info_t conn_info = get_conn_info(&client_addr);
-    char log[100];
-    sprintf(log, "client connected from %s:%d\n", conn_info.hostname, conn_info.port);
-    print_info(log);
 
-    if (pthread_create(&thread_id, NULL, handle_client, (void *)&client_sock) < 0) {
+    struct conn_args args;
+    args.sock = client_sock;
+    args.sockaddr = client_addr;
+
+    if (pthread_create(&thread_id, NULL, handle_client, (void *)&args) < 0) {
       printf("could not create thread.\n");
       return 1;
     }
-    pthread_detach(thread_id);
   }
 
   return 0;
@@ -76,31 +78,34 @@ main(int argc, char *argv[])
 
 
 void
-*handle_client(void *client_sock)
+*handle_client(void *arguments)
 {
-  int sock = *(int *)client_sock;
+  struct conn_args *args = arguments;
+  int sock = args->sock;
+  struct sockaddr_in sockaddr = args->sockaddr;
   char buf[BUF_SIZE], *host, *subdomain;
   client_t *client = NULL;
   ssize_t n;
-
+  conn_info_t conn_info = get_conn_info(&sockaddr);
 
   if ((client = server.clients[0]) != NULL && client->ready == 1) {
-    int id = client->next_tunnel_id;
-    printf("%d\n", id);
-    client->connections[id]->tunnel_conn = sock;
     client->ready = 0;
-
-    struct transfer_args args;
-    args.source_sock = client->connections[id]->tunnel_conn;
-    args.destination_sock = client->connections[id]->http_conn;
-
-    pthread_t tid;
-    if (pthread_create(&tid, NULL, &handle_transfer, (void *)&args) < 0) {
-      printf("error creating thread.\n");
-    }
-    pthread_detach(tid);
+    int id = client->next_tunnel_id;
+    client->connections[id]->tunnel_conn = sock;
 
     send(client->connections[id]->tunnel_conn, client->buf, strlen(client->buf), 0);
+
+    struct transfer_args args;
+    pthread_t tid;
+
+    args.source_sock = client->connections[id]->http_conn;
+    args.destination_sock = client->connections[id]->tunnel_conn;
+
+    if (pthread_create(&tid, NULL, handle_transfer, (void *)&args) < 0) {
+      printf("error creating thread.\n");
+    }
+    pthread_join(tid, NULL);
+
     return 0;
   }
 
@@ -111,12 +116,12 @@ void
       char log[100];
       sprintf(log, "client (%s) initialized\n", client->id);
       print_info(log);
-    } else if (strstr(buf, "HTTP") != NULL && client != NULL && client->ready == 0) {
+    } else {
       host = extract_text(buf, "Host:", "\r\n");
       subdomain = extract_text(host, " ", ".");
 
       client = server.clients[0];
-      init_tunnel(sock, client);
+      init_tunnel(sock, client, conn_info);
       strcpy(client->buf, buf);
       client->ready = 1;
 
@@ -134,7 +139,7 @@ init_client(int client_sock, client_t *client)
   char *id = rand_string(8);
   char resp[100] = "[vex_data]: ";
   strncat(resp, id, strlen(id));
-  write(client_sock, resp, strlen(resp));
+  send(client_sock, resp, strlen(resp), 0);
 
   client->id = id;
   client->main_conn = client_sock;
@@ -144,14 +149,15 @@ init_client(int client_sock, client_t *client)
 }
 
 void
-init_tunnel(int remote_conn, client_t *client)
+init_tunnel(int remote_conn, client_t *client, conn_info_t conn_info)
 {
   client->next_tunnel_id++;
   tunnel_t *tunnel = malloc(sizeof(tunnel_t));
   tunnel->http_conn = remote_conn;
   client->connections[client->next_tunnel_id] = tunnel;
-  char log[100];
-  sprintf(log, "new tunnel established (%d)\n", client->next_tunnel_id);
+  char log[200];
+  sprintf(log, "(%s) new tunnel established - %s:%d <> %s:%d\n",
+    client->id, server.conn_info.hostname, server.conn_info.port, conn_info.hostname, conn_info.port);
   print_info(log);
 }
 
@@ -181,6 +187,9 @@ create_socket(int port)
   if (listen(server_sock, 128) < 0) {
     exit(1);
   }
+
+  conn_info_t conn_info = get_conn_info(&server_addr);
+  server.conn_info = conn_info;
 
   return server_sock;
 }

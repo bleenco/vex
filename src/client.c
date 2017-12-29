@@ -111,7 +111,7 @@ create_tunnel(int index, char *remote_host, int remote_port, char *local_host, i
   args.source_sock = remote_conn;
   args.destination_sock = local_conn;
 
-  if (pthread_create(&thread_id, NULL, &handle_transfer, (void *)&args) < 0) {
+  if (pthread_create(&thread_id, NULL, handle_transfer, (void *)&args) < 0) {
     printf("error creating thread.\n");
   }
 }

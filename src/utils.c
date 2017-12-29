@@ -28,8 +28,8 @@ void
   ssize_t n;
   char buf[BUF_SIZE];
 
-  while ((n = read(args->source_sock, buf, BUF_SIZE)) > 0) {
-    write(args->destination_sock, buf, n);
+  while ((n = recv(args->source_sock, buf, BUF_SIZE, 0)) > 0) {
+    send(args->destination_sock, buf, n, 0);
   }
 
   shutdown(args->destination_sock, SHUT_RDWR);
@@ -54,11 +54,11 @@ void
   args_out.source_sock = args->destination_sock;
   args_out.destination_sock = args->source_sock;
 
-  if (pthread_create(&tid[0], NULL, &transfer, (void *)&args_in) < 0) {
+  if (pthread_create(&tid[0], NULL, transfer, (void *)&args_in) < 0) {
     printf("error creating thread.\n");
   }
 
-  if (pthread_create(&tid[1], NULL, &transfer, (void *)&args_out) < 0) {
+  if (pthread_create(&tid[1], NULL, transfer, (void *)&args_out) < 0) {
     printf("error creating thread.\n");
   }
 
@@ -77,8 +77,9 @@ get_conn_info(struct sockaddr_in *addr)
 
   inet_ntop(AF_INET, (struct sockaddr_in *)&addr->sin_addr, str, INET_ADDRSTRLEN);
   port = ntohs(addr->sin_port);
-  conn_info.hostname = str;
+  strcpy(conn_info.hostname, str);
   conn_info.port = port;
+
   return conn_info;
 }
 
