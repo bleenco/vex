@@ -1,3 +1,11 @@
+/**
+ * @license
+ * Copyright Bleenco GmbH. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://github.com/bleenco/vex
+ */
+
 #include "utils.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -404,7 +412,6 @@ print_help()
          " -p <port>         Bind to this port number. Default: 1234\n"
          " -d <domain>       Use this domain when generating URLs.\n"
          "\n"
-         "from Bleenco GmbH\n"
-         "(c) Bleenco OSS Team, 2017\n");
+         "Copyright (c) 2017 Bleenco GmbH http://bleenco.com \n");
   exit(1);
 }
