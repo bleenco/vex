@@ -180,6 +180,9 @@ init_client(int client_sock, client_t *client)
 
   char resp[100] = "[vex_data]: ";
   strncat(resp, id, strlen(id));
+  strncat(resp, " ", 1);
+  strncat(resp, server.domain, strlen(server.domain));
+  strncat(resp, " ", 1);
   send(client_sock, resp, strlen(resp), 0);
 }
 

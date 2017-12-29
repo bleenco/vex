@@ -8,6 +8,7 @@
 #include <resolv.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <getopt.h>
 
 typedef struct {
   int remote_conn;
@@ -16,47 +17,60 @@ typedef struct {
 } tunnel_t;
 
 typedef struct {
-  char *id;
-  char *remote_host;
-  int remote_port;
-  char *local_host;
-  int local_port;
+  char id[100];
+  char remote_host[100];
+  unsigned short remote_port;
+  char local_host[100];
+  unsigned short local_port;
   tunnel_t connections[10];
 } client_t;
 
 int create_connection(char *remote_host, int remote_port);
 void create_tunnel(int index, char *remote_host, int remote_port, char *local_host, int local_port);
+void parse_args(int argc, char **argv);
+void usage();
 
 client_t client;
 
 int
-main(int argc, char *argv[])
+main(int argc, char **argv)
 {
+  parse_args(argc, argv);
+
   int remote_sock;
   ssize_t n;
 
-  client.remote_host = "33412dea.jan";
-  client.remote_port = 5000;
-  client.local_host = "localhost";
-  client.local_port = 6500;
-
   remote_sock = create_connection(client.remote_host, client.remote_port);
+
+  char log[200];
+  sprintf(log, "successfully connected to %s:%hu, initializing ...\n", client.remote_host, client.remote_port);
+  print_info(log);
 
   char buf[BUF_SIZE] = "[vex_client_init]";
   write(remote_sock, buf, strlen(buf));
   memset(buf, 0, BUF_SIZE);
-  int port;
 
   while ((n = read(remote_sock, buf, BUF_SIZE)) > 0) {
     if (strstr(buf, "[vex_data]")) {
+      printf("%s\n", buf);
       char delimit[] = " ";
       strtok(buf, delimit);
       char *id = strtok(NULL, delimit);
-      port = 5000;
-      client.id = id;
+      char *domain = strtok(NULL, delimit);
+      strcpy(client.id, id);
+      sprintf(log, "client successfully initialized with id: %s\n", client.id);
+      print_info(log);
+      char port[10] = "";
+      char host[150];
+      if (client.remote_port != 80) {
+        sprintf(port, ":%hu", client.remote_port);
+      }
+      sprintf(host, "%s%s%s", client.id, ".", domain);
+      sprintf(log, "url: http://%s%s secure url: https://%s%s\n", host, port, host, port);
+      print_info(log);
       memset(buf, 0, BUF_SIZE);
     } else if (strstr(buf, "[vex_tunnel]")) {
-      create_tunnel(0, client.remote_host, port, client.local_host, client.local_port);
+      create_tunnel(0, client.remote_host, client.remote_port, client.local_host, client.local_port);
       memset(buf, 0, BUF_SIZE);
     }
   }
@@ -96,7 +110,10 @@ create_connection(char *remote_host, int remote_port)
 void
 create_tunnel(int index, char *remote_host, int remote_port, char *local_host, int local_port)
 {
-  printf("creating tunnel...\n");
+  char log[100];
+  sprintf(log, "establishing new tunnel ...\n");
+  print_info(log);
+
   tunnel_t tunnel;
   pthread_t thread_id;
   struct transfer_args args;
@@ -110,8 +127,81 @@ create_tunnel(int index, char *remote_host, int remote_port, char *local_host, i
 
   args.source_sock = remote_conn;
   args.destination_sock = local_conn;
+  strcpy(args.id, client.id);
 
   if (pthread_create(&thread_id, NULL, handle_transfer, (void *)&args) < 0) {
     printf("error creating thread.\n");
   }
+}
+
+void
+parse_args(int argc, char **argv)
+{
+  static struct option long_opt[] = {
+    {"help",          no_argument,       NULL, 'h'},
+    {"remote_host",   required_argument, NULL, 'r'},
+    {"remote_port",   optional_argument, NULL, 'b'},
+    {"local_port",    required_argument, NULL, 'p'},
+    {"local_host",    required_argument, NULL, 'l'},
+    {"subdomain_id",  optional_argument, NULL, 'i'},
+    {NULL,            0,                 NULL, 0  }
+  };
+
+  strcpy(client.local_host, "localhost");
+  client.local_port = 0;
+  strcpy(client.remote_host, "");
+  client.remote_port = 1234;
+  int opt;
+
+  while ((opt = getopt_long(argc, argv, "r:b:p:l:i:", long_opt, NULL)) != -1) {
+    switch (opt) {
+      case 'r':
+        strcpy(client.remote_host, optarg);
+      break;
+      case 'b':
+        if (1 != sscanf(optarg, "%hu", &client.remote_port)) {
+          printf("bad port number: %s", optarg);
+          usage();
+        }
+      break;
+      case 'p':
+        if (1 != sscanf(optarg, "%hu", &client.local_port)) {
+          printf("bad port number: %s", optarg);
+          usage();
+        }
+      break;
+      case 'l':
+        strcpy(client.local_host, optarg);
+      break;
+      case 'i':
+        strcpy(client.id, optarg);
+      break;
+      default:
+        usage();
+    }
+  }
+
+  if (!strcmp(client.remote_host, "") || client.local_port == 0 || client.remote_port == 0) {
+    usage();
+  }
+}
+
+void
+usage()
+{
+  printf("vex\n\n"
+         "Usage: vex [-i <subdomain_id> -b <remote_port> -r <remote_host> -p <local_port> -l <local_host> [-h]]\n"
+         "\n"
+         "Options:\n"
+         "\n"
+         " -h                        Show this help message.\n"
+         " -i <subdomain_id>         Send request to use this subdomain. Randomly generated if not provided.\n"
+         " -b <remote_port>          Connect to this remote port. Default: 1234\n"
+         " -r <remote_host>          Connect to this remote host. Mandatory.\n"
+         " -p <local_port>           Port where your service is running. Mandatory.\n"
+         " -p <local_host>           Host where your service is running. Default: localhost.\n"
+         "\n"
+         "from Bleenco GmbH\n"
+         "(c) Bleenco OSS Team, 2017\n");
+  exit(1);
 }
