@@ -36,7 +36,10 @@ void
   struct transfer_args *args = arguments;
   ssize_t n;
   double total = 0;
+  char id[100];
   char buf[BUF_SIZE], size[10];
+
+  strcpy(id, args->id);
 
   while ((n = recv(args->source_sock, buf, BUF_SIZE, 0)) > 0) {
     total += n;
@@ -51,7 +54,7 @@ void
 
   char *in_out = (args->data_in == 1) ? "in" : "out";
   char log[200];
-  sprintf(log, "(%s) data transfered %s - %s\n", args->id, in_out, readable_fs(total, size));
+  sprintf(log, "(%s) data transfered %s - %s\n", id, in_out, readable_fs(total, size));
   print_info(log);
 
   return 0;

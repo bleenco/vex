@@ -70,7 +70,7 @@ void *watch_client(void *arguments);
 void *read_conn(void *arguments);
 void parse_args(int argc, char **argv);
 int get_client_id(char *subdomain);
-void print_help();
+void usage();
 
 server_t server;
 pthread_mutex_t mutex_lock;
@@ -86,6 +86,7 @@ main(int argc, char **argv)
 
   server.server_sock = create_socket(server.local_port);
   server.num_clients = 0;
+  server.active_client_id = -1;
   pthread_mutex_init(&mutex_lock, NULL);
 
   while ((client_sock = accept(server.server_sock, (struct sockaddr *)&client_addr, &addrlen))) {
@@ -120,7 +121,7 @@ void
   hargs.sock = sock;
   hargs.conn_info = conn_info;
 
-  if ((client = server.clients[server.active_client_id]) != NULL && client->ready == 1) {
+  if (server.active_client_id != -1 && (client = server.clients[server.active_client_id]) != NULL && client->ready == 1) {
     pthread_mutex_unlock(&mutex_lock);
     client->ready = 0;
     int id = client->last_id;
@@ -138,10 +139,6 @@ void
       printf("error creating thread.\n");
     }
     pthread_join(tid, NULL);
-
-    client->connections[id]->http_conn = -1;
-    client->connections[id]->tunnel_conn = -1;
-    client->connections[id]->status = 0;
   } else {
     if (pthread_create(&htid, NULL, read_conn, (void *)&hargs) < 0) {
       printf("error creating thread.\n");
@@ -174,6 +171,11 @@ void
   int id = get_client_id(client->id);
   if (id != -1) {
     server.clients[id]->is_disconnected = 1;
+    server.clients[id]->ready = 0;
+  }
+
+  if (server.active_client_id == id) {
+    server.active_client_id = -1;
   }
 
   char log[100];
@@ -278,7 +280,7 @@ void
 void
 init_client(int client_sock, client_t *client, char *reqid)
 {
-  char id[50];
+  char id[100];
   if (!strncmp(reqid, "random", strlen(reqid))) {
     strcpy(id, rand_string(8));
   } else {
@@ -294,13 +296,11 @@ init_client(int client_sock, client_t *client, char *reqid)
   int num = server.num_clients;
 
   for (int i = 0; i < num; i++) {
-    if (!strncmp(server.clients[i]->id, id, strlen(id)) || server.clients[i]->is_disconnected == 1) {
+    if (!strcmp(server.clients[i]->id, id) || server.clients[i]->is_disconnected == 1) {
       num = i;
       break;
     }
   }
-
-  printf("%s %d\n", client->id, num);
 
   server.clients[num] = client;
   if (num == server.num_clients) {
@@ -415,27 +415,27 @@ parse_args(int argc, char **argv)
       case 'p':
         if (1 != sscanf(optarg, "%hu", &server.local_port)) {
           printf("bad port number: %s", optarg);
-          print_help();
+          usage();
         }
       break;
       case 'd':
         strcpy(server.domain, optarg);
       break;
       case 'h':
-        print_help();
+        usage();
       break;
       default:
-        print_help();
+        usage();
     }
   }
 
   if (!strcmp(server.domain, "")) {
-    print_help();
+    usage();
   }
 }
 
 void
-print_help()
+usage()
 {
   printf("vex-server\n\n"
          "Usage: vex-server [-p <port> [-h] -d <domain>]\n"

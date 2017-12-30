@@ -1,7 +1,7 @@
 TARGET_SERVER = build/vex-server
 TARGET_CLIENT = build/vex
-CC = cc
-CFLAGS = -O2 -std=c99 -Wall -I include -lm -pthread
+CC = clang
+CFLAGS = -Wall -I include -lm -pthread
 DEPS = build/utils.o build/http.o
 
 .PHONY: all client server checkdir clean image
