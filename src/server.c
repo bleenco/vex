@@ -7,6 +7,7 @@
  */
 
 #include "utils.h"
+#include "http.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -66,7 +67,7 @@ void *handle_client(void *client_sock);
 void init_client(int client_sock, client_t *client, char *reqid);
 void init_tunnel(int remote_conn, client_t *client, conn_info_t conn_info);
 void *watch_client(void *arguments);
-void *read_head(void *arguments);
+void *read_conn(void *arguments);
 void parse_args(int argc, char **argv);
 int get_client_id(char *subdomain);
 void print_help();
@@ -142,7 +143,7 @@ void
     client->connections[id]->tunnel_conn = -1;
     client->connections[id]->status = 0;
   } else {
-    if (pthread_create(&htid, NULL, read_head, (void *)&hargs) < 0) {
+    if (pthread_create(&htid, NULL, read_conn, (void *)&hargs) < 0) {
       printf("error creating thread.\n");
     }
     pthread_join(htid, NULL);
@@ -174,7 +175,6 @@ void
   if (id != -1) {
     server.clients[id]->is_disconnected = 1;
   }
-  // memset(server.clients[id]->connections, 0, sizeof(tunnel_t));
 
   char log[100];
   sprintf(log, "(%s) client disconnected\n", client->id);
@@ -184,62 +184,94 @@ void
 }
 
 void
-*read_head(void *arguments)
+*read_conn(void *arguments)
 {
   struct handle_args *args = arguments;
   int sock = args->sock;
-  client_t *client = malloc(sizeof(client_t));
   conn_info_t conn_info = args->conn_info;
-  ssize_t n;
-  char buf[BUF_SIZE], *host, *subdomain;
+  int client_id;
+  client_t *client;
 
-  if ((n = recv(sock, buf, BUF_SIZE, 0)) > 0) {
-    if (strncmp(buf, "[vex_client_init]", 17) == 0) { // new client connected
-      char delimit[] = " ";
-      strtok(buf, delimit);
-      char *reqid = strtok(NULL, delimit);
-      if (reqid == NULL) {
-        reqid = "";
-      }
+  struct request req;
+  int resource = 0;
 
-      client_t *client = malloc(sizeof(client_t));
-      init_client(sock, client, reqid);
+  init_request(&req);
+  req.domain = server.domain;
+
+  if (get_request(sock, &req) < 0) {
+    return 0;
+  }
+
+  if (req.subdomain != NULL) {
+    client_id = get_client_id(req.subdomain);
+    if (client_id == -1) {
+      req.status = 404;
+      http_error(sock, &req, "ID Not Found");
+      shutdown(sock, SHUT_RDWR);
+      close(sock);
+      return 0;
+    }
+
+    pthread_mutex_lock(&mutex_lock);
+    client = server.clients[client_id];
+    server.active_client_id = client_id;
+    init_tunnel(sock, client, conn_info);
+    strcpy(client->buf, req.buf);
+
+    char *initbuf = "[vex_tunnel]";
+    send(client->main_conn, initbuf, strlen(initbuf), 0);
+    client->ready = 1;
+  } else {
+    if (strstr(req.resource, "/vex-api/client-init/") != NULL) {
+      char reqid[100];
+      client_t client;
+
+      strcpy(reqid, req.resource);
+      remove_substring(reqid, "/vex-api/client-init/");
+
+      init_client(sock, &client, reqid);
       char log[100];
-      sprintf(log, "client (%s) initialized\n", client->id);
+      sprintf(log, "client (%s) initialized\n", client.id);
       print_info(log);
 
       pthread_t wtid;
       struct watch_args wargs;
-      wargs.sock = client->main_conn;
-      wargs.client = client;
+      wargs.sock = client.main_conn;
+      wargs.client = &client;
 
       if (pthread_create(&wtid, NULL, watch_client, (void *)&wargs) < 0) {
         printf("error creating thread.\n");
       }
       pthread_join(wtid, NULL);
-
-      return 0;
     } else {
-      pthread_mutex_lock(&mutex_lock);
-      host = extract_text(buf, "Host:", "\r\n");
-      subdomain = extract_text(host, " ", ".");
-      int id = get_client_id(subdomain);
+      if (req.status == 200) {
+        if ((resource = check_resource(&req)) < 0) {
+          if (errno == EACCES) {
+            req.status = 401;
+          } else {
+            req.status = 404;
+          }
+        }
 
-      if (id == -1) {
-        return 0;
+        if ((resource > 0) && req.status == 200) {
+          http_send(sock, &req, resource);
+        } else {
+          http_error(sock, &req, "Not found.");
+        }
+
+        if (resource > 0) {
+          if (close(resource) < 0) {
+            printf("error!\n");
+          }
+        }
+
+        shutdown(sock, SHUT_RDWR);
+        close(sock);
       }
-
-      client = server.clients[id];
-      server.active_client_id = id;
-      init_tunnel(sock, client, conn_info);
-      strcpy(client->buf, buf);
-
-      char *initbuf = "[vex_tunnel]";
-      send(client->main_conn, initbuf, strlen(initbuf), 0);
-      client->ready = 1;
     }
   }
 
+  free_request(&req);
   return 0;
 }
 
@@ -267,6 +299,8 @@ init_client(int client_sock, client_t *client, char *reqid)
       break;
     }
   }
+
+  printf("%s %d\n", client->id, num);
 
   server.clients[num] = client;
   if (num == server.num_clients) {
@@ -362,7 +396,7 @@ get_client_id(char *subdomain)
 {
   int num = server.num_clients;
   for (int i = 0; i < num; i++) {
-    if (!strncmp(server.clients[i]->id, subdomain, strlen(subdomain))) {
+    if (!strcmp(server.clients[i]->id, subdomain)) {
       return i;
     }
   }

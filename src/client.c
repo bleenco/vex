@@ -7,6 +7,7 @@
  */
 
 #include "utils.h"
+#include "http.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -47,6 +48,7 @@ main(int argc, char **argv)
 
   int remote_sock;
   ssize_t n;
+  char buf[BUF_SIZE];
 
   remote_sock = create_connection(client.remote_host, client.remote_port);
 
@@ -54,15 +56,8 @@ main(int argc, char **argv)
   sprintf(log, "successfully connected to %s:%hu, initializing ...\n", client.remote_host, client.remote_port);
   print_info(log);
 
-  char buf[BUF_SIZE] = "[vex_client_init]";
   char *reqid = (!strncmp(client.id, "", strlen(client.id))) ? "random" : client.id;
-  strncat(buf, " ", 1);
-  strncat(buf, reqid, strlen(client.id));
-  strncat(buf, " ", 1);
-  if ((n = write(remote_sock, buf, strlen(buf))) <= 0) {
-    printf("error writing to remote socket.\n");
-  }
-  memset(buf, 0, BUF_SIZE);
+  send_http_client_request(remote_sock, reqid);
 
   while ((n = read(remote_sock, buf, BUF_SIZE)) > 0) {
     if (strstr(buf, "[vex_data]")) {

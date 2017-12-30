@@ -9,6 +9,7 @@
 #include "utils.h"
 #include <unistd.h>
 #include <errno.h>
+#include <ctype.h>
 #include <pthread.h>
 
 char
@@ -140,4 +141,163 @@ char
   }
   sprintf(buf, "%.*f%s", i, size, units[i]);
   return buf;
+}
+
+ssize_t
+readn(int fd, void *vptr, size_t n)
+{
+  size_t nleft;
+  ssize_t nread;
+  char *ptr;
+
+  ptr = vptr;
+  nleft = n;
+  while (nleft > 0) {
+    if ((nread = read(fd, ptr, nleft)) < 0) {
+      if (errno == EINTR) {
+        nread = 0;
+      } else {
+        return -1;
+      }
+    } else if (nread == 0) {
+      break;
+    }
+
+    nleft -= nread;
+    ptr += nread;
+  }
+  return (n - nleft);
+}
+
+ssize_t
+writen(int fd, const void *vptr, size_t n)
+{
+  size_t nleft;
+  ssize_t nwritten;
+  const char *ptr;
+
+  ptr = vptr;
+  nleft = n;
+  while (nleft > 0) {
+    if ( (nwritten = write(fd, ptr, nleft)) <= 0) {
+      if (nwritten < 0 && errno == EINTR) {
+        nwritten = 0;
+      } else {
+        return -1;
+      }
+    }
+
+    nleft -= nwritten;
+    ptr += nwritten;
+  }
+  return (n);
+}
+
+ssize_t
+readline(int sockd, void *vptr, size_t maxlen)
+{
+  ssize_t n, rc;
+  char    c, *buffer;
+
+  buffer = vptr;
+
+  for (n = 1; n < maxlen; n++) {
+    if ( (rc = read(sockd, &c, 1)) == 1 ) {
+      *buffer++ = c;
+      if ( c == '\n' ) {
+  	    break;
+      }
+    } else if (rc == 0) {
+      if ( n == 1 ) {
+	      return 0;
+      } else {
+  	    break;
+      }
+    } else {
+      if (errno == EINTR) {
+  	    continue;
+        exit(1);
+      }
+    }
+  }
+
+  *buffer = 0;
+  return n;
+}
+
+
+ssize_t
+writeline(int sockd, const void *vptr, size_t n)
+{
+  size_t      nleft;
+  ssize_t     nwritten;
+  const char *buffer;
+
+  buffer = vptr;
+  nleft  = n;
+
+  while (nleft > 0) {
+  	if ((nwritten = write(sockd, buffer, nleft)) <= 0) {
+  	  if (errno == EINTR) {
+  		  nwritten = 0;
+      } else {
+  	    exit(1);
+  	  }
+    }
+  	nleft  -= nwritten;
+  	buffer += nwritten;
+  }
+
+  return n;
+}
+
+
+int trim(char *buffer) {
+  int n = strlen(buffer) - 1;
+
+  while (!isalnum(buffer[n]) && n >= 0) {
+    buffer[n--] = '\0';
+  }
+  return 0;
+}
+
+
+int
+str_upper(char *buffer)
+{
+  while (*buffer) {
+   *buffer = toupper(*buffer);
+    ++buffer;
+  }
+  return 0;
+}
+
+void
+clean_url(char *buffer)
+{
+  char asciinum[3] = {0};
+  int i = 0, c;
+
+  while (buffer[i]) {
+	  if ( buffer[i] == '+' ) {
+	    buffer[i] = ' ';
+	  } else if (buffer[i] == '%') {
+	    asciinum[0] = buffer[i+1];
+	    asciinum[1] = buffer[i+2];
+	    buffer[i] = strtol(asciinum, NULL, 16);
+	    c = i+1;
+	    do {
+		    buffer[c] = buffer[c+2];
+	    } while (buffer[2+(c++)]);
+	  }
+	++i;
+  }
+}
+
+void
+remove_substring(char *buffer, const char *removebuf)
+{
+  while ((buffer = strstr(buffer, removebuf)) != NULL) {
+    memmove(buffer, buffer + strlen(removebuf), 1 + strlen((buffer + strlen(removebuf))));
+  }
 }
