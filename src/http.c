@@ -305,11 +305,8 @@ send_http_client_request(int conn, char *id)
 {
   char buffer[100];
 
-  sprintf(buffer, "GET /vex-api/client-init/%s HTTP/1.1\r\n", id);
+  sprintf(buffer, "GET /vex-api/client-init/%s\r\n", id);
   writeline(conn, buffer, strlen(buffer));
-
-  writeline(conn, "User-Agent: vex-client\r\n", 24);
-  writeline(conn, "\r\n", 2);
 
   return 0;
 }

@@ -7,8 +7,9 @@ COPY ./include /vex/include
 
 RUN apt update && apt install -y build-essential \
     && mkdir -p build \
+    && cc -Wall -I include -c src/http.c -o build/http.o \
     && cc -Wall -I include -c src/utils.c -o build/utils.o \
-    && cc -O2 -std=c99 -Wall -I include -lm -pthread build/utils.o -o build/vex-server src/server.c
+    && cc -O2 -std=c99 -Wall -I include -lm -pthread build/utils.o build/http.o -o build/vex-server src/server.c
 
 # Stage 2
 FROM ubuntu:artful
