@@ -1,0 +1,15 @@
+---
+BasedOnStyle: LLVM
+IndentWidth: 2
+---
+Language: C
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+AlignEscapedNewlines: true
+AlignAfterOpenBracket: true
+AlignOperands: true
+AlignTrailingComments: true
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortBlocksOnASingleLine: true
+AllowShortCaseLabelsOnASingleLine: true
+PointerAlignment: Right
