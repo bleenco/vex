@@ -4,7 +4,6 @@ Vex is an improved localtunnel or http tunnel written in ANSI C. This repository
 
 We improve localtunnel in following points:
 * Server creates TCP tunnels on demand, only after receiving a request from the client. There are no *n* open sockets awaiting for incomming requests.
-* (in progress) Supporting all protocols. Localtunnel supports only TCP tunnels for HTTP protocol.
 
 ## Building project
 
@@ -27,7 +26,7 @@ Options:
  -p <port>         Bind to this port number. Default: 1234
  -d <domain>       Use this domain when generating URLs.
 
-Copyright (c) 2017 Bleenco GmbH http://bleenco.com
+Copyright (c) 2018 Bleenco GmbH http://bleenco.com
 ```
 
 ## Running client to connect to the server
@@ -46,7 +45,7 @@ Options:
  -p <local_port>           Port where your service is running. Mandatory.
  -p <local_host>           Host where your service is running. Default: localhost.
 
-Copyright (c) 2017 Bleenco GmbH http://bleenco.com
+Copyright (c) 2018 Bleenco GmbH http://bleenco.com
 ```
 
 ## Using bleenco.space server
@@ -55,9 +54,10 @@ We provide a hosted `vex` server with the `bleenco.space` root domain name free 
 
 ## LICENSE
 
+```
 The MIT License
 
-Copyright (c) 2017 Bleenco GmbH http://bleenco.com
+Copyright (c) 2018 Bleenco GmbH http://bleenco.com
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -76,3 +76,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+```
