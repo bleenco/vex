@@ -50,7 +50,13 @@ Copyright (c) 2018 Bleenco GmbH http://bleenco.com
 
 ## Using bleenco.space server
 
-We provide a hosted `vex` server with the `bleenco.space` root domain name free of any charge for you to use it. Feel free to try it out and use it on your projects.
+We provide a hosted `vex` server with the `vex.bleenco.space` root domain name free of any charge for you to use it. Feel free to try it out and use it on your projects.
+
+For example, if you are running some http service on local port 6500:
+
+```
+$ vex -i myid -r vex.bleenco.space -p 6500 
+```
 
 ## LICENSE
 
