@@ -14,8 +14,8 @@ RUN apt update && apt install -y clang \
 # Stage 2
 FROM ubuntu:artful
 
-ENV DOMAIN bleenco.space
-ENV PORT 1234
+ENV DOMAIN vex.bleenco.space
+ENV PORT 4321
 
 ENV TINI_VERSION v0.16.1
 
