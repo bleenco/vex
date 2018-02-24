@@ -82,6 +82,8 @@ main(int argc, char **argv)
 {
   parse_args(argc, argv);
 
+  signal(SIGPIPE, SIG_IGN);
+
   int client_sock;
   struct sockaddr_in client_addr;
   socklen_t addrlen = sizeof(client_addr);
@@ -361,10 +363,12 @@ create_socket(int port)
   struct sockaddr_in server_addr;
 
   if ((server_sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    printf("Could not create socket!\n");
     exit(1);
   }
 
   if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval)) < 0) {
+    printf("Could not set socket options!\n");
     exit(1);
   }
 

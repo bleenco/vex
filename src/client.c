@@ -20,6 +20,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <getopt.h>
+#include <signal.h>
 
 typedef struct {
   int remote_conn;
@@ -47,6 +48,8 @@ int
 main(int argc, char **argv)
 {
   parse_args(argc, argv);
+
+  signal(SIGPIPE, SIG_IGN);
 
   int remote_sock;
   ssize_t n;
