@@ -21,6 +21,7 @@ type SSHServer struct {
 	isRunning bool
 	closer    sync.Once
 	clients   map[string]Client
+	domain    string
 }
 
 type Client struct {
@@ -28,6 +29,7 @@ type Client struct {
 	net.Conn
 	*ssh.ServerConn
 	Listeners map[string]net.Listener
+	Channel   ssh.NewChannel
 	Addr      string
 	Port      uint32
 }
@@ -68,6 +70,7 @@ func (s *SSHServer) listen(addr string, domain string) error {
 		log.Fatalf("Failed to listen on %s (%s)", addr, err)
 	}
 	s.listener = listener
+	s.domain = domain
 
 	log.Printf("SSH server listening on %s, generating urls on *.%s ...\n", addr, domain)
 
@@ -78,16 +81,17 @@ func (s *SSHServer) listen(addr string, domain string) error {
 			continue
 		}
 
-		sshConn, _, reqs, err := ssh.NewServerConn(tcpConn, s.config)
+		sshConn, chans, reqs, err := ssh.NewServerConn(tcpConn, s.config)
 		if err != nil {
 			log.Printf("Failed to handshake (%s)\n", err)
 			continue
 		}
 
-		client := &Client{randID(), tcpConn, sshConn, make(map[string]net.Listener), "", 0}
+		client := &Client{randID(), tcpConn, sshConn, make(map[string]net.Listener), nil, "", 0}
 		log.Printf("New SSH connection from %s (%s)", sshConn.RemoteAddr(), sshConn.ClientVersion())
 
 		go s.handleRequests(client, reqs)
+		go s.handleChannels(client, chans)
 	}
 }
 
@@ -111,9 +115,15 @@ func (s *SSHServer) Wait() error {
 	return <-s.running
 }
 
+func (s *SSHServer) handleChannels(client *Client, chans <-chan ssh.NewChannel) {
+	for newChannel := range chans {
+		client.Channel = newChannel
+	}
+}
+
 func (s *SSHServer) handleRequests(client *Client, reqs <-chan *ssh.Request) {
 	for req := range reqs {
-		client.Conn.SetDeadline(time.Now().Add(5 * time.Minute))
+		client.Conn.SetDeadline(time.Now().Add(2 * time.Minute))
 
 		log.Printf("[%s] Out of band request: %v %v", client.ID, req.Type, req.WantReply)
 
@@ -130,6 +140,15 @@ func (s *SSHServer) handleRequests(client *Client, reqs <-chan *ssh.Request) {
 			client.Port = bindinfo.Port
 			client.Listeners[bindinfo.Bound] = listener
 			s.clients[client.ID] = *client
+
+			channelConn, _, err := client.Channel.Accept()
+			if err != nil {
+				log.Printf("Could not accept channel (%s)", err)
+				return
+			}
+
+			generatedURL := "http://" + client.ID + "." + s.domain
+			io.WriteString(channelConn, "[vexd] Generated URL: "+generatedURL)
 
 			go handleListener(client, bindinfo, listener)
 			continue
