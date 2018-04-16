@@ -29,7 +29,6 @@ type Client struct {
 	net.Conn
 	*ssh.ServerConn
 	Listeners map[string]net.Listener
-	Channel   ssh.NewChannel
 	Addr      string
 	Port      uint32
 }
@@ -87,7 +86,7 @@ func (s *SSHServer) listen(addr string, domain string) error {
 			continue
 		}
 
-		client := &Client{randID(), tcpConn, sshConn, make(map[string]net.Listener), nil, "", 0}
+		client := &Client{randID(), tcpConn, sshConn, make(map[string]net.Listener), "", 0}
 		log.Printf("New SSH connection from %s (%s)", sshConn.RemoteAddr(), sshConn.ClientVersion())
 
 		go s.handleRequests(client, reqs)
@@ -117,7 +116,14 @@ func (s *SSHServer) Wait() error {
 
 func (s *SSHServer) handleChannels(client *Client, chans <-chan ssh.NewChannel) {
 	for newChannel := range chans {
-		client.Channel = newChannel
+		channelConn, _, err := newChannel.Accept()
+		if err != nil {
+			log.Printf("Could not accept channel (%s)", err)
+			return
+		}
+
+		generatedURL := "http://" + client.ID + "." + s.domain
+		io.WriteString(channelConn, "[vexd] Generated URL: "+generatedURL)
 	}
 }
 
@@ -140,15 +146,6 @@ func (s *SSHServer) handleRequests(client *Client, reqs <-chan *ssh.Request) {
 			client.Port = bindinfo.Port
 			client.Listeners[bindinfo.Bound] = listener
 			s.clients[client.ID] = *client
-
-			channelConn, _, err := client.Channel.Accept()
-			if err != nil {
-				log.Printf("Could not accept channel (%s)", err)
-				return
-			}
-
-			generatedURL := "http://" + client.ID + "." + s.domain
-			io.WriteString(channelConn, "[vexd] Generated URL: "+generatedURL)
 
 			go handleListener(client, bindinfo, listener)
 			continue
