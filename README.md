@@ -6,7 +6,7 @@ Vex is a reverse HTTP proxy tunnel via secure SSH connections. It is compatible 
   <img src="https://user-images.githubusercontent.com/1796022/38793799-f23c981a-4152-11e8-9e6c-382ce6536c87.png">
 </p>
 
-### Establish tunnel via running vex server on bleenco.space
+### Establish tunnel with vexd server on bleenco.space (ssh client)
 
 Let's say you are running HTTP server locally on port 6500, then command would be:
 
@@ -26,6 +26,28 @@ $ ssh -R 10500:localhost:6500 bleenco.space -p 2200
 ```
 
 Then open generated URL in the browser to check if works, then share the URL if needed.
+
+### Establish tunnel with vexd server on bleenco.space (vex client)
+
+```sh
+$ vex -s bleenco.space -p 2200 -ls localhost -lp 7500
+```
+
+`vex` client options:
+
+```
+Usage: vex [options]
+
+Options:
+
+-s, SSH server remote host (default: bleenco.space)
+
+-p, SSH server remote port (default: 2200)
+
+-ls, Local HTTP server host (default: localhost)
+
+-lp, Local HTTP server port (default: 7500)
+```
 
 ### Run cross-compilation build
 

@@ -5,7 +5,7 @@ OSARCH = "!darwin/arm !windows/arm"
 
 build:
 	mkdir -p ${OUTPUT_DIR}
-	GOARM=5 gox -os=${OS} -arch=${ARCH} -osarch=${OSARCH} -output "${OUTPUT_DIR}/{{.Dir}}_{{.OS}}_{{.Arch}}" ./cmd/vexd
+	GOARM=5 gox -os=${OS} -arch=${ARCH} -osarch=${OSARCH} -output "${OUTPUT_DIR}/{{.Dir}}_{{.OS}}_{{.Arch}}" ./cmd/vexd ./cmd/vex
 
 clean:
 	rm -rf ${OUTPUT_DIR}
