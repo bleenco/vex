@@ -59,6 +59,24 @@ falls back to 0.0.0.0:2200)
 falls back to 0.0.0.0:2000)
 ```
 
+### Establishing tunnel with PuTTY and bleenco.space service
+
+Lets say, you are running local webserver on port 7500.
+
+Open PuTTY;
+
+Host Name (or IP address): `bleenco.space` and Port: `2200`
+
+<img src="https://user-images.githubusercontent.com/1796022/38806500-c09558a2-4179-11e8-88f1-d25a6f3fd4ab.png">
+
+Go to `Category => Connection => SSH => Tunnels` and enter the following
+
+<img src="https://user-images.githubusercontent.com/1796022/38806504-c3961bb8-4179-11e8-9559-b50ec5ca74cd.png">
+
+Click `Open`, if it asks for login username just hit `Enter`.
+
+You tunnel should now be established.
+
 ### Licence
 
 ```
