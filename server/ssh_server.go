@@ -209,8 +209,24 @@ func handleForwardTCPIP(client *Client, bindinfo *bindInfo, lconn net.Conn) {
 	log.Printf("[%s] Channel opened for client", client.ID)
 	go ssh.DiscardRequests(requests)
 
-	go io.Copy(c, lconn)
-	go io.Copy(lconn, c)
+	go handleForwardTCPIPTransfer(c, lconn)
+}
+
+func handleForwardTCPIPTransfer(c ssh.Channel, lconn net.Conn) {
+	defer lconn.Close()
+	done := make(chan bool)
+
+	go func() {
+		io.Copy(c, lconn)
+		done <- true
+	}()
+
+	go func() {
+		io.Copy(lconn, c)
+		done <- true
+	}()
+
+	<-done
 }
 
 func handleForward(client *Client, req *ssh.Request) (net.Listener, *bindInfo, error) {
