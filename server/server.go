@@ -3,9 +3,12 @@ package vexserver
 import (
 	"net/http"
 	"net/http/httputil"
+	// "net/http/httputil"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/yhat/wsutil"
 )
 
 type Config struct {
@@ -54,9 +57,15 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if client, ok := s.sshServer.clients[userID]; ok {
 		w.Header().Set("X-Proxy", "vexd")
-		url, _ := url.Parse("http://" + client.Addr + ":" + strconv.Itoa(int(client.Port)))
-		proxy := httputil.NewSingleHostReverseProxy(url)
-		proxy.ServeHTTP(w, r)
+		if strings.ToLower(r.Header.Get("Upgrade")) == "websocket" {
+			url := &url.URL{Scheme: "ws://", Host: client.Addr + ":" + strconv.Itoa(int(client.Port))}
+			proxy := wsutil.NewSingleHostReverseProxy(url)
+			proxy.ServeHTTP(w, r)
+		} else {
+			url, _ := url.Parse("http://" + client.Addr + ":" + strconv.Itoa(int(client.Port)))
+			proxy := httputil.NewSingleHostReverseProxy(url)
+			proxy.ServeHTTP(w, r)
+		}
 	}
 
 	w.WriteHeader(http.StatusNotFound)
