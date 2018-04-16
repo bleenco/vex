@@ -5,6 +5,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -43,11 +44,16 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
-	if len(s.sshServer.clients) > 0 {
-		client := s.sshServer.clients["jan"]
+	host := r.Host
+	userID := host
+	pos := strings.IndexByte(host, '.')
+	if pos > 0 {
+		userID = host[:pos]
+	}
 
+	if client, ok := s.sshServer.clients[userID]; ok {
 		w.Header().Set("X-Proxy", "vexd")
-		url, _ := url.Parse("http://localhost:" + strconv.Itoa(int(client.Port)))
+		url, _ := url.Parse("http://" + client.Addr + ":" + strconv.Itoa(int(client.Port)))
 		proxy := httputil.NewSingleHostReverseProxy(url)
 		proxy.ServeHTTP(w, r)
 	}

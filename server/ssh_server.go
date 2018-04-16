@@ -1,6 +1,7 @@
 package vexserver
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -27,6 +28,7 @@ type Client struct {
 	net.Conn
 	*ssh.ServerConn
 	Listeners map[string]net.Listener
+	Addr      string
 	Port      uint32
 }
 
@@ -35,10 +37,11 @@ func NewSSHServer() *SSHServer {
 		listener: nil,
 		config: &ssh.ServerConfig{
 			PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
-				if c.User() == "foo" && string(pass) == "bar" {
-					return nil, nil
-				}
-				return nil, fmt.Errorf("password rejected for %q", c.User())
+				// if c.User() == "foo" && string(pass) == "bar" {
+				// 	return nil, nil
+				// }
+				// return nil, fmt.Errorf("password rejected for %q", c.User())
+				return nil, nil
 			},
 		},
 		running: make(chan error, 1),
@@ -87,7 +90,7 @@ func (s *SSHServer) listen(addr string) error {
 			continue
 		}
 
-		client := &Client{"jan", tcpConn, sshConn, make(map[string]net.Listener), 0}
+		client := &Client{randID(), tcpConn, sshConn, make(map[string]net.Listener), "", 0}
 		log.Printf("New SSH connection from %s (%s)", sshConn.RemoteAddr(), sshConn.ClientVersion())
 
 		go s.handleRequests(client, reqs)
@@ -130,6 +133,7 @@ func (s *SSHServer) handleRequests(client *Client, reqs <-chan *ssh.Request) {
 				client.Conn.Close()
 			}
 
+			client.Addr = bindinfo.Addr
 			client.Port = bindinfo.Port
 			client.Listeners[bindinfo.Bound] = listener
 			s.clients[client.ID] = *client
@@ -211,10 +215,9 @@ func handleForward(client *Client, req *ssh.Request) (net.Listener, *bindInfo, e
 	}
 
 	log.Printf("[%s] Request: %s %v %v", client.ID, req.Type, req.WantReply, payload)
-	log.Printf("[%s] Request to listen on %s:%d", client.ID, "localhost", payload.Port)
+	log.Printf("[%s] Request to listen on %s:%d", client.ID, payload.Addr, payload.Port)
 
-	bind := fmt.Sprintf("%s:%d", "localhost", payload.Port)
-	log.Printf(bind)
+	bind := fmt.Sprintf("%s:%d", payload.Addr, payload.Port)
 	ln, err := net.Listen("tcp", bind)
 	if err != nil {
 		log.Printf("[%s] Listen failed for %s", client.ID, bind)
@@ -226,4 +229,10 @@ func handleForward(client *Client, req *ssh.Request) (net.Listener, *bindInfo, e
 	req.Reply(true, ssh.Marshal(&reply))
 
 	return ln, &bindInfo{bind, payload.Port, payload.Addr}, nil
+}
+
+func randID() string {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)
 }
