@@ -36,20 +36,14 @@ func NewSSHServer() *SSHServer {
 	return &SSHServer{
 		listener: nil,
 		config: &ssh.ServerConfig{
-			PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
-				// if c.User() == "foo" && string(pass) == "bar" {
-				// 	return nil, nil
-				// }
-				// return nil, fmt.Errorf("password rejected for %q", c.User())
-				return nil, nil
-			},
+			NoClientAuth: true,
 		},
 		running: make(chan error, 1),
 		clients: make(map[string]Client),
 	}
 }
 
-func (s *SSHServer) Start(addr string, privateKey string) error {
+func (s *SSHServer) Start(addr string, privateKey string, domain string) error {
 	privateBytes, err := ioutil.ReadFile(privateKey)
 	if err != nil {
 		log.Fatalf("Failed to load private key %s\n", privateKey)
@@ -63,19 +57,19 @@ func (s *SSHServer) Start(addr string, privateKey string) error {
 	s.config.AddHostKey(private)
 
 	go func() {
-		s.closeWith(s.listen(addr))
+		s.closeWith(s.listen(addr, domain))
 	}()
 	return nil
 }
 
-func (s *SSHServer) listen(addr string) error {
+func (s *SSHServer) listen(addr string, domain string) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("Failed to listen on %s (%s)", addr, err)
 	}
 	s.listener = listener
 
-	log.Printf("SSH server listening on %s...\n", addr)
+	log.Printf("SSH server listening on %s, generating urls on *.%s ...\n", addr, domain)
 
 	for {
 		tcpConn, err := s.listener.Accept()
@@ -84,7 +78,7 @@ func (s *SSHServer) listen(addr string) error {
 			continue
 		}
 
-		sshConn, chans, reqs, err := ssh.NewServerConn(tcpConn, s.config)
+		sshConn, _, reqs, err := ssh.NewServerConn(tcpConn, s.config)
 		if err != nil {
 			log.Printf("Failed to handshake (%s)\n", err)
 			continue
@@ -94,7 +88,6 @@ func (s *SSHServer) listen(addr string) error {
 		log.Printf("New SSH connection from %s (%s)", sshConn.RemoteAddr(), sshConn.ClientVersion())
 
 		go s.handleRequests(client, reqs)
-		go s.handleChannels(client, chans)
 	}
 }
 
@@ -148,7 +141,6 @@ func (s *SSHServer) handleRequests(client *Client, reqs <-chan *ssh.Request) {
 }
 
 func handleListener(client *Client, bindinfo *bindInfo, listener net.Listener) {
-	// Start listening for connections
 	for {
 		lconn, err := listener.Accept()
 		if err != nil {
@@ -191,21 +183,6 @@ func handleForwardTCPIP(client *Client, bindinfo *bindInfo, lconn net.Conn) {
 	go io.Copy(lconn, c)
 }
 
-func (s *SSHServer) handleChannels(client *Client, chans <-chan ssh.NewChannel) {
-	for newChannel := range chans {
-		go handleChannel(client, newChannel)
-	}
-}
-
-func handleChannel(client *Client, newChannel ssh.NewChannel) {
-	log.Printf("[%s] Channel type: %v", client.ID, newChannel.ChannelType())
-
-	// if t := newChannel.ChannelType(); t != "session" {
-	// 	newChannel.Reject(ssh.UnknownChannelType, fmt.Sprintf("unknown channel type: %s", t))
-	// 	return
-	// }
-}
-
 func handleForward(client *Client, req *ssh.Request) (net.Listener, *bindInfo, error) {
 	var payload tcpIPForwardPayload
 	if err := ssh.Unmarshal(req.Payload, &payload); err != nil {
@@ -215,7 +192,6 @@ func handleForward(client *Client, req *ssh.Request) (net.Listener, *bindInfo, e
 	}
 
 	log.Printf("[%s] Request: %s %v %v", client.ID, req.Type, req.WantReply, payload)
-	log.Printf("[%s] Request to listen on %s:%d", client.ID, payload.Addr, payload.Port)
 
 	bind := fmt.Sprintf("%s:%d", payload.Addr, payload.Port)
 	ln, err := net.Listen("tcp", bind)
@@ -224,6 +200,8 @@ func handleForward(client *Client, req *ssh.Request) (net.Listener, *bindInfo, e
 		req.Reply(false, []byte{})
 		return nil, nil, err
 	}
+
+	log.Printf("[%s] Listening on %s:%d", client.ID, payload.Addr, payload.Port)
 
 	reply := tcpIPForwardPayloadReply{payload.Port}
 	req.Reply(true, ssh.Marshal(&reply))

@@ -9,6 +9,7 @@ import (
 )
 
 type Config struct {
+	Domain         string
 	PrivateKeyFile string
 	SSHListenAddr  string
 	HTTPListenAddr string
@@ -29,7 +30,7 @@ func NewServer(config *Config) *Server {
 }
 
 func (s *Server) Run() error {
-	err := s.sshServer.Start(s.config.SSHListenAddr, s.config.PrivateKeyFile)
+	err := s.sshServer.Start(s.config.SSHListenAddr, s.config.PrivateKeyFile, s.config.Domain)
 	if err != nil {
 		return err
 	}
