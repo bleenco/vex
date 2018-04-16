@@ -2,6 +2,9 @@ package vexserver
 
 import (
 	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"strconv"
 )
 
 type Config struct {
@@ -40,6 +43,15 @@ func (s *Server) Run() error {
 }
 
 func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	if len(s.sshServer.clients) > 0 {
+		client := s.sshServer.clients["jan"]
+
+		w.Header().Set("X-Proxy", "vexd")
+		url, _ := url.Parse("http://localhost:" + strconv.Itoa(int(client.Port)))
+		proxy := httputil.NewSingleHostReverseProxy(url)
+		proxy.ServeHTTP(w, r)
+	}
+
 	w.WriteHeader(http.StatusNotFound)
 	w.Write([]byte("Not found"))
 }
