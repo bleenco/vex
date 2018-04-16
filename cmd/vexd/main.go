@@ -70,6 +70,10 @@ func main() {
 		*httplistenaddr = "0.0.0.0:2000"
 	}
 
+	if _, err := os.Stat(*privatekeyfile); os.IsNotExist(err) {
+		vexserver.GenerateRSA()
+	}
+
 	config := &vexserver.Config{
 		Domain:         *domain,
 		PrivateKeyFile: *privatekeyfile,
