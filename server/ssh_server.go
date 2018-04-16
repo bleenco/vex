@@ -28,9 +28,10 @@ type Client struct {
 	ID string
 	net.Conn
 	*ssh.ServerConn
-	Listeners map[string]net.Listener
-	Addr      string
-	Port      uint32
+	Listeners   map[string]net.Listener
+	Addr        string
+	Port        uint32
+	ListenMutex *sync.Mutex
 }
 
 func NewSSHServer() *SSHServer {
@@ -86,8 +87,19 @@ func (s *SSHServer) listen(addr string, domain string) error {
 			continue
 		}
 
-		client := &Client{randID(), tcpConn, sshConn, make(map[string]net.Listener), "", 0}
+		client := &Client{randID(), tcpConn, sshConn, make(map[string]net.Listener), "", 0, &sync.Mutex{}}
 		log.Printf("New SSH connection from %s (%s)", sshConn.RemoteAddr(), sshConn.ClientVersion())
+
+		go func() {
+			err := client.ServerConn.Wait()
+			client.ListenMutex.Lock()
+			log.Printf("[%s] SSH connection closed: %s", client.ID, err)
+
+			for bind, listener := range client.Listeners {
+				log.Printf("[%s] Closing listener bound to %s", client.ID, bind)
+				listener.Close()
+			}
+		}()
 
 		go s.handleRequests(client, reqs)
 		go s.handleChannels(client, chans)
@@ -134,11 +146,12 @@ func (s *SSHServer) handleRequests(client *Client, reqs <-chan *ssh.Request) {
 		log.Printf("[%s] Out of band request: %v %v", client.ID, req.Type, req.WantReply)
 
 		if req.Type == "tcpip-forward" {
-			req.Reply(true, []byte{})
+			client.ListenMutex.Lock()
 
 			listener, bindinfo, err := handleForward(client, req)
 			if err != nil {
 				fmt.Printf("[%s] Error, disconnecting ...\n", client.ID)
+				client.ListenMutex.Unlock()
 				client.Conn.Close()
 			}
 
@@ -146,6 +159,7 @@ func (s *SSHServer) handleRequests(client *Client, reqs <-chan *ssh.Request) {
 			client.Port = bindinfo.Port
 			client.Listeners[bindinfo.Bound] = listener
 			s.clients[client.ID] = *client
+			client.ListenMutex.Unlock()
 
 			go handleListener(client, bindinfo, listener)
 			continue
