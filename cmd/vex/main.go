@@ -106,20 +106,24 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 
-	for {
-		// Open a (local) connection to localEndpoint whose content will be forwarded so serverEndpoint
-		local, err := net.Dial("tcp", localEndpoint.String())
-		if err != nil {
-			log.Fatalln(fmt.Printf("Dial INTO local service error: %s", err))
-		}
+	go func() {
+		for {
+			// Open a (local) connection to localEndpoint whose content will be forwarded so serverEndpoint
+			local, err := net.Dial("tcp", localEndpoint.String())
+			if err != nil {
+				log.Fatalln(fmt.Printf("Dial INTO local service error: %s", err))
+			}
 
-		client, err := listener.Accept()
-		if err != nil {
-			log.Fatalln(err)
-		}
+			client, err := listener.Accept()
+			if err != nil {
+				log.Fatalln(err)
+			}
 
-		go handleClient(client, local)
-	}
+			go handleClient(client, local)
+		}
+	}()
+
+	<-c
 }
 
 func handleClient(client net.Conn, remote net.Conn) {
