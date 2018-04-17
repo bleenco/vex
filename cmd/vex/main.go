@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -34,7 +35,9 @@ var help = `
 
   -ls, Local HTTP server host (default: localhost)
 
-  -lp, Local HTTP server port (default: 7500)
+	-lp, Local HTTP server port (default: 7500)
+
+	-a, Keep tunnel connection alive (default: false)
 
   Read more:
     https://github.com/bleenco/vex
@@ -45,6 +48,7 @@ var (
 	remotePort   = flag.Int("p", 2200, "")
 	localServer  = flag.String("ls", "localhost", "")
 	localPort    = flag.Int("lp", 7500, "")
+	keepAlive    = flag.Bool("a", false, "")
 )
 
 func main() {
@@ -80,6 +84,16 @@ func main() {
 	serverConn, err := ssh.Dial("tcp", serverEndpoint.String(), sshConfig)
 	if err != nil {
 		log.Fatalln(fmt.Printf("Dial INTO remote server error: %s", err))
+	}
+
+	connectionDone := make(chan struct{})
+	if *keepAlive {
+		go func() {
+			err = keepAliveTicker(serverConn, connectionDone)
+			if err != nil {
+				log.Fatalln(fmt.Printf("Cannot initialize keep alive on connection: %s", err))
+			}
+		}()
 	}
 
 	go func() {
@@ -147,6 +161,22 @@ func handleClient(client net.Conn, remote net.Conn) {
 	}()
 
 	<-chDone
+}
+
+func keepAliveTicker(cl *ssh.Client, done <-chan struct{}) error {
+	t := time.NewTicker(time.Minute)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			_, _, err := cl.SendRequest("keepalive", true, nil)
+			if err != nil {
+				return errors.Wrap(err, "failed to send keep alive")
+			}
+		case <-done:
+			return nil
+		}
+	}
 }
 
 func randomPort(min, max int) int {
