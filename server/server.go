@@ -60,10 +60,12 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 			url := &url.URL{Scheme: "ws://", Host: client.Addr + ":" + strconv.Itoa(int(client.Port))}
 			proxy := wsutil.NewSingleHostReverseProxy(url)
 			proxy.ServeHTTP(w, r)
+			return
 		} else {
 			url, _ := url.Parse("http://" + client.Addr + ":" + strconv.Itoa(int(client.Port)))
 			proxy := httputil.NewSingleHostReverseProxy(url)
 			proxy.ServeHTTP(w, r)
+			return
 		}
 	}
 
