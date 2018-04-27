@@ -35,9 +35,9 @@ var help = `
 
   -ls, Local HTTP server host (default: localhost)
 
-	-lp, Local HTTP server port (default: 7500)
+  -lp, Local HTTP server port (default: 7500)
 
-	-a, Keep tunnel connection alive (default: false)
+  -a, Keep tunnel connection alive (default: false)
 
   Read more:
     https://github.com/bleenco/vex
