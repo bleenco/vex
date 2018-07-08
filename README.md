@@ -1,23 +1,21 @@
 ## vex
 
-Vex is a reverse HTTP proxy tunnel via secure SSH connections. It is compatible with `ssh` client.
+Vex is a reverse HTTP proxy tunnel via secure SSH connections.
 
-### Establish tunnel with vexd server on bleenco.space (ssh client)
+### Establish tunnel with vexd server on bleenco.space.
 
 Let's say you are running HTTP server locally on port 6500, then command would be:
 
 ```sh
-ssh -R 10100:localhost:6500 bleenco.space -p 2200
+$ vex -s bleenco.space -p 2200 -ls localhost -lp 6500
 ```
-
-where 10100 is randomly picked port to bind SSH listener on server to establish tunnels. You should pick that random and don't use 10100 if not free.
 
 2200 is port where vex daemon (server) is running and localhost:6500 is local HTTP server.
 
 Example output:
 
 ```sh
-$ ssh -R 10500:localhost:6500 bleenco.space -p 2200
+$ vex -s bleenco.space -p 2200 -ls localhost -lp 6500
 [vexd] Generated URL: http://23c41c01.bleenco.space
 ```
 
@@ -43,6 +41,8 @@ Options:
 -ls, Local HTTP server host (default: localhost)
 
 -lp, Local HTTP server port (default: 7500)
+
+-a, Keep tunnel connection alive (default: false)
 ```
 
 ### Run cross-compilation build
@@ -76,24 +76,6 @@ falls back to 0.0.0.0:2200)
 -http, HTTP server listen address (defaults to VEX_HTTP_SERVER and
 falls back to 0.0.0.0:2000)
 ```
-
-### Establishing tunnel with PuTTY and bleenco.space service
-
-Lets say, you are running local webserver on port 7500.
-
-Open PuTTY;
-
-Host Name (or IP address): `bleenco.space` and Port: `2200`
-
-<img src="https://user-images.githubusercontent.com/1796022/38806500-c09558a2-4179-11e8-88f1-d25a6f3fd4ab.png">
-
-Go to `Category => Connection => SSH => Tunnels` and enter the following
-
-<img src="https://user-images.githubusercontent.com/1796022/38806504-c3961bb8-4179-11e8-9559-b50ec5ca74cd.png">
-
-Click `Open`, if it asks for login username just hit `Enter`.
-
-You tunnel should now be established.
 
 ### Licence
 

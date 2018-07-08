@@ -25,22 +25,22 @@ func (endpoint *Endpoint) String() string {
 }
 
 var help = `
-  Usage: vex [options]
+Usage: vex [options]
 
-  Options:
+Options:
 
-  -s, SSH server remote host (default: bleenco.space)
+-s, SSH server remote host (default: bleenco.space)
 
-  -p, SSH server remote port (default: 2200)
+-p, SSH server remote port (default: 2200)
 
-  -ls, Local HTTP server host (default: localhost)
+-ls, Local HTTP server host (default: localhost)
 
-  -lp, Local HTTP server port (default: 7500)
+-lp, Local HTTP server port (default: 7500)
 
-  -a, Keep tunnel connection alive (default: false)
+-a, Keep tunnel connection alive (default: false)
 
-  Read more:
-    https://github.com/bleenco/vex
+Read more:
+	https://github.com/bleenco/vex
 `
 
 var (
@@ -122,7 +122,7 @@ func main() {
 
 	go func() {
 		for {
-			// Open a (local) connection to localEndpoint whose content will be forwarded so serverEndpoint
+			// Open a (local) connection to localEndpoint whose content will be forwarded to serverEndpoint
 			local, err := net.Dial("tcp", localEndpoint.String())
 			if err != nil {
 				log.Fatalln(fmt.Printf("Dial INTO local service error: %s", err))

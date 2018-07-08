@@ -135,7 +135,7 @@ func (s *SSHServer) handleChannels(client *Client, chans <-chan ssh.NewChannel) 
 		}
 
 		generatedURL := "http://" + client.ID + "." + s.domain
-		io.WriteString(channelConn, "[vexd] Generated URL: "+generatedURL)
+		io.WriteString(channelConn, "[vexd] Generated URL: "+generatedURL+"\n")
 	}
 }
 
