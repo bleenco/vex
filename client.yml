@@ -1,0 +1,6 @@
+server_addr: 0.0.0.0:5223
+tunnels:
+  jankuri.com:
+    proto: http
+    addr: localhost:4050
+    host: tunnel.home.local.net
