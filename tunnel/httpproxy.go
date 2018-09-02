@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"path"
 
-	"github.com/bleenco/vex/log"
+	"github.com/bleenco/vex/logger"
 	"github.com/bleenco/vex/proto"
 )
 
@@ -27,19 +27,19 @@ type HTTPProxy struct {
 	// * host
 	localURLMap map[string]*url.URL
 	// logger is the proxy logger.
-	logger log.Logger
+	logger *logger.Logger
 }
 
 // NewHTTPProxy creates a new direct HTTPProxy, everything will be proxied to
 // localURL.
-func NewHTTPProxy(localURL *url.URL, logger log.Logger) *HTTPProxy {
-	if logger == nil {
-		logger = log.NewNopLogger()
+func NewHTTPProxy(localURL *url.URL, log *logger.Logger) *HTTPProxy {
+	if log == nil {
+		log = logger.NewLogger(false)
 	}
 
 	p := &HTTPProxy{
 		localURL: localURL,
-		logger:   logger,
+		logger:   log,
 	}
 	p.ReverseProxy.Director = p.Director
 
@@ -48,14 +48,14 @@ func NewHTTPProxy(localURL *url.URL, logger log.Logger) *HTTPProxy {
 
 // NewMultiHTTPProxy creates a new dispatching HTTPProxy, requests may go to
 // different backends based on localURLMap.
-func NewMultiHTTPProxy(localURLMap map[string]*url.URL, logger log.Logger) *HTTPProxy {
-	if logger == nil {
-		logger = log.NewNopLogger()
+func NewMultiHTTPProxy(localURLMap map[string]*url.URL, log *logger.Logger) *HTTPProxy {
+	if log == nil {
+		log = logger.NewLogger(false)
 	}
 
 	p := &HTTPProxy{
 		localURLMap: localURLMap,
-		logger:      logger,
+		logger:      log,
 	}
 	p.ReverseProxy.Director = p.Director
 
@@ -66,33 +66,20 @@ func NewMultiHTTPProxy(localURLMap map[string]*url.URL, logger log.Logger) *HTTP
 func (p *HTTPProxy) Proxy(w io.Writer, r io.ReadCloser, msg *proto.ControlMessage) {
 	switch msg.ForwardedProto {
 	case proto.HTTP, proto.HTTPS:
-		// ok
+	// ok
 	default:
-		p.logger.Log(
-			"level", 0,
-			"msg", "unsupported protocol",
-			"ctrlMsg", msg,
-		)
+		p.logger.Errorf("http proxy: unsupported protocol, control message: %s", msg)
 		return
 	}
 
 	rw, ok := w.(http.ResponseWriter)
 	if !ok {
-		p.logger.Log(
-			"level", 0,
-			"msg", "expected http.ResponseWriter",
-			"ctrlMsg", msg,
-		)
+		p.logger.Errorf("http proxy: expected http.ResponseWriter, control message: %s", msg)
 	}
 
 	req, err := http.ReadRequest(bufio.NewReader(r))
 	if err != nil {
-		p.logger.Log(
-			"level", 0,
-			"msg", "failed to read request",
-			"ctrlMsg", msg,
-			"err", err,
-		)
+		p.logger.Errorf("http proxy: failed to read request, control message: %s, reason: %s", msg, err)
 		return
 	}
 
@@ -110,11 +97,7 @@ func (p *HTTPProxy) Director(req *http.Request) {
 
 	target := p.localURLFor(req.URL)
 	if target == nil {
-		p.logger.Log(
-			"level", 1,
-			"msg", "no target",
-			"url", req.URL,
-		)
+		p.logger.Infof("http proxy: no target, url: %s", req.URL)
 
 		_, cancel := context.WithCancel(req.Context())
 		cancel()
@@ -138,13 +121,7 @@ func (p *HTTPProxy) Director(req *http.Request) {
 	}
 
 	req.Host = req.URL.Host
-
-	p.logger.Log(
-		"level", 2,
-		"action", "url rewrite",
-		"from", &orig,
-		"to", req.URL,
-	)
+	p.logger.Debugf("http proxy: URL rewrite, from: %s, to: %s", &orig, req.URL)
 }
 
 func singleJoiningSlash(a, b string) string {

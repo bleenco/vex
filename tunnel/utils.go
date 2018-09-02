@@ -6,26 +6,18 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/bleenco/vex/log"
+	"github.com/bleenco/vex/logger"
 )
 
-func transfer(dst io.Writer, src io.Reader, logger log.Logger) {
+func transfer(dst io.Writer, src io.Reader, log *logger.Logger) {
 	n, err := io.Copy(dst, src)
 	if err != nil {
 		if !strings.Contains(err.Error(), "context canceled") && !strings.Contains(err.Error(), "CANCEL") {
-			logger.Log(
-				"level", 2,
-				"msg", "copy error",
-				"err", err,
-			)
+			log.Errorf("data transfer: copy error, reason: %s", err)
 		}
 	}
 
-	logger.Log(
-		"level", 3,
-		"action", "transferred",
-		"bytes", n,
-	)
+	log.Debugf("data transfer: transferred bytes: %d", n)
 }
 
 func setXForwardedFor(h http.Header, remoteAddr string) {

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bleenco/vex/log"
+	"github.com/bleenco/vex/logger"
 	"github.com/bleenco/vex/proto"
 	"golang.org/x/net/http2"
 )
@@ -34,7 +34,7 @@ type ClientConfig struct {
 	// and local services.
 	Proxy ProxyFunc
 	// Logger is optional logger. If nil logging is disabled.
-	Logger log.Logger
+	Logger *logger.Logger
 }
 
 // Client is responsible for creating connection to the server, handling control
@@ -48,7 +48,7 @@ type Client struct {
 	httpServer     *http2.Server
 	serverErr      error
 	lastDisconnect time.Time
-	logger         log.Logger
+	logger         *logger.Logger
 }
 
 // NewClient creates a new unconnected Client based on configuration. Caller
@@ -67,15 +67,15 @@ func NewClient(config *ClientConfig) (*Client, error) {
 		return nil, errors.New("missing Proxy")
 	}
 
-	logger := config.Logger
-	if logger == nil {
-		logger = log.NewNopLogger()
+	log := config.Logger
+	if log == nil {
+		log = logger.NewLogger(false)
 	}
 
 	c := &Client{
 		config:     config,
 		httpServer: &http2.Server{},
-		logger:     logger,
+		logger:     log,
 	}
 
 	return c, nil
@@ -86,10 +86,7 @@ func NewClient(config *ClientConfig) (*Client, error) {
 // error a backoff policy is used to reestablish the connection. When connected
 // HTTP/2 server is started to handle ControlMessages.
 func (c *Client) Start() error {
-	c.logger.Log(
-		"level", 1,
-		"action", "start",
-	)
+	c.logger.Infof("start")
 
 	for {
 		conn, err := c.connect()
@@ -101,10 +98,7 @@ func (c *Client) Start() error {
 			Handler: http.HandlerFunc(c.serveHTTP),
 		})
 
-		c.logger.Log(
-			"level", 1,
-			"action", "disconnected",
-		)
+		c.logger.Infof("disconnected")
 
 		c.connMu.Lock()
 		now := time.Now()
@@ -151,12 +145,7 @@ func (c *Client) dial() (net.Conn, error) {
 	)
 
 	doDial := func() (conn net.Conn, err error) {
-		c.logger.Log(
-			"level", 1,
-			"action", "dial",
-			"network", network,
-			"addr", addr,
-		)
+		c.logger.Infof("dial network: %s address: %s", network, addr)
 
 		if c.config.DialTLS != nil {
 			conn, err = c.config.DialTLS(network, addr, tlsConfig)
@@ -183,13 +172,7 @@ func (c *Client) dial() (net.Conn, error) {
 				conn = nil
 			}
 
-			c.logger.Log(
-				"level", 0,
-				"msg", "dial failed",
-				"network", network,
-				"addr", addr,
-				"err", err,
-			)
+			c.logger.Errorf("dial failed network: %s addr: %s reason: %s", network, addr, err)
 		}
 
 		return
@@ -216,11 +199,7 @@ func (c *Client) dial() (net.Conn, error) {
 		}
 
 		// backoff
-		c.logger.Log(
-			"level", 1,
-			"action", "backoff",
-			"sleep", d,
-		)
+		c.logger.Infof("backoff sleep: %d", d)
 		time.Sleep(d)
 	}
 }
@@ -237,46 +216,27 @@ func (c *Client) serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 	msg, err := proto.ReadControlMessage(r)
 	if err != nil {
-		c.logger.Log(
-			"level", 1,
-			"err", err,
-		)
+		c.logger.Errorf("%s", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	c.logger.Log(
-		"level", 2,
-		"action", "handle",
-		"ctrlMsg", msg,
-	)
+	c.logger.Debugf("handle, control message: %s", msg)
+
 	switch msg.Action {
 	case proto.ActionProxy:
 		c.config.Proxy(w, r.Body, msg)
 	default:
-		c.logger.Log(
-			"level", 0,
-			"msg", "unknown action",
-			"ctrlMsg", msg,
-		)
+		c.logger.Errorf("unknown action, control message: %s", msg)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
-	c.logger.Log(
-		"level", 2,
-		"action", "done",
-		"ctrlMsg", msg,
-	)
+	c.logger.Debugf("done, control message: %s", msg)
 }
 
 func (c *Client) handleHandshakeError(w http.ResponseWriter, r *http.Request) {
 	err := fmt.Errorf(r.Header.Get(proto.HeaderError))
 
-	c.logger.Log(
-		"level", 1,
-		"action", "handshake error",
-		"addr", r.RemoteAddr,
-		"err", err,
-	)
+	c.logger.Errorf("handshake error, addr: %s, reason: %s", r.RemoteAddr, err)
 
 	c.connMu.Lock()
 	c.serverErr = fmt.Errorf("server error: %s", err)
@@ -284,21 +244,13 @@ func (c *Client) handleHandshakeError(w http.ResponseWriter, r *http.Request) {
 }
 
 func (c *Client) handleHandshake(w http.ResponseWriter, r *http.Request) {
-	c.logger.Log(
-		"level", 1,
-		"action", "handshake",
-		"addr", r.RemoteAddr,
-	)
+	c.logger.Infof("handshake, addr: %s", r.RemoteAddr)
 
 	w.WriteHeader(http.StatusOK)
 
 	b, err := json.Marshal(c.config.Tunnels)
 	if err != nil {
-		c.logger.Log(
-			"level", 0,
-			"msg", "handshake failed",
-			"err", err,
-		)
+		c.logger.Errorf("handshake failed, reason: %s", err)
 		return
 	}
 	w.Write(b)
@@ -309,10 +261,7 @@ func (c *Client) Stop() {
 	c.connMu.Lock()
 	defer c.connMu.Unlock()
 
-	c.logger.Log(
-		"level", 1,
-		"action", "stop",
-	)
+	c.logger.Infof("stop")
 
 	if c.conn != nil {
 		c.conn.Close()

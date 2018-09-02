@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/bleenco/vex/id"
-	"github.com/bleenco/vex/log"
+	"github.com/bleenco/vex/logger"
 	"github.com/bleenco/vex/tunnel"
 	"golang.org/x/net/http2"
 )
@@ -23,7 +23,7 @@ func main() {
 		return
 	}
 
-	logger := log.NewFilterLogger(log.NewStdLogger(), opts.logLevel)
+	log := logger.NewLogger(false)
 
 	tlsconf, err := tlsConfig(opts)
 	if err != nil {
@@ -37,7 +37,7 @@ func main() {
 		Addr:          opts.tunnelAddr,
 		AutoSubscribe: autoSubscribe,
 		TLSConfig:     tlsconf,
-		Logger:        logger,
+		Logger:        log,
 	})
 	if err != nil {
 		fatal("failed to create server: %s", err)
@@ -60,11 +60,7 @@ func main() {
 	// start HTTP
 	if opts.httpAddr != "" {
 		go func() {
-			logger.Log(
-				"level", 1,
-				"action", "start http",
-				"addr", opts.httpAddr,
-			)
+			log.Infof("start http, addr: %s", opts.httpAddr)
 
 			fatal("failed to start HTTP: %s", http.ListenAndServe(opts.httpAddr, server))
 		}()
@@ -73,11 +69,7 @@ func main() {
 	// start HTTPS
 	if opts.httpsAddr != "" {
 		go func() {
-			logger.Log(
-				"level", 1,
-				"action", "start https",
-				"addr", opts.httpsAddr,
-			)
+			log.Infof("start https, addr: %s", opts.httpsAddr)
 
 			s := &http.Server{
 				Addr:    opts.httpsAddr,

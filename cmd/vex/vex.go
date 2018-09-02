@@ -10,7 +10,7 @@ import (
 	"os"
 
 	"github.com/bleenco/vex/certgen"
-	"github.com/bleenco/vex/log"
+	"github.com/bleenco/vex/logger"
 	"github.com/bleenco/vex/proto"
 	"github.com/bleenco/vex/tunnel"
 
@@ -23,13 +23,14 @@ var (
 	host       = kingpin.Flag("host", "Hostname").Short('h').Default("test.bleenco.space").String()
 	protocol   = kingpin.Flag("protocol", "Protocol to use, http or tcp").Short('p').Default("http").Enum("http", "tcp")
 	serverAddr = kingpin.Flag("serverAddr", "Remote server address").Short('s').Default("bleenco.space:5223").String()
+	debug      = kingpin.Flag("debug", "Debug mode").Short('d').Bool()
 )
 
 func main() {
 	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version("0.1.0").Author("Bleenco GmbH")
 	kingpin.Parse()
 
-	logger := log.NewFilterLogger(log.NewStdLogger(), 1)
+	logger := logger.NewLogger(*debug)
 
 	certPath, keyPath := certgen.CheckAndGenerateCert()
 
@@ -155,7 +156,7 @@ func tunnels(m map[string]*Tunnel) map[string]*proto.Tunnel {
 	return p
 }
 
-func proxy(m map[string]*Tunnel, logger log.Logger) tunnel.ProxyFunc {
+func proxy(m map[string]*Tunnel, log *logger.Logger) tunnel.ProxyFunc {
 	httpURL := make(map[string]*url.URL)
 	tcpAddr := make(map[string]string)
 
@@ -173,8 +174,8 @@ func proxy(m map[string]*Tunnel, logger log.Logger) tunnel.ProxyFunc {
 	}
 
 	return tunnel.Proxy(tunnel.ProxyFuncs{
-		HTTP: tunnel.NewMultiHTTPProxy(httpURL, log.NewContext(logger).WithPrefix("proxy", "HTTP")).Proxy,
-		TCP:  tunnel.NewMultiTCPProxy(tcpAddr, log.NewContext(logger).WithPrefix("proxy", "TCP")).Proxy,
+		HTTP: tunnel.NewMultiHTTPProxy(httpURL, log).Proxy,
+		TCP:  tunnel.NewMultiTCPProxy(tcpAddr, log).Proxy,
 	})
 }
 

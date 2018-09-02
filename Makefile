@@ -2,7 +2,15 @@ all: build
 
 build:
 	@mkdir -p build
+	@make build_client
+	@make build_server
+
+build_client:
+	@mkdir -p build
 	@go build -o build/vex cmd/vex/*.go
+
+build_server:
+	@mkdir -p build
 	@go build -o build/vexd cmd/vexd/*.go
 
 clean:

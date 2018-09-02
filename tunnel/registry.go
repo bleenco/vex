@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/bleenco/vex/id"
-	"github.com/bleenco/vex/log"
+	"github.com/bleenco/vex/logger"
 )
 
 // RegistryItem holds information about hosts and listeners associated with a client.
@@ -30,18 +30,18 @@ type registry struct {
 	items  map[id.ID]*RegistryItem
 	hosts  map[string]*hostInfo
 	mu     sync.RWMutex
-	logger log.Logger
+	logger *logger.Logger
 }
 
-func newRegistry(logger log.Logger) *registry {
-	if logger == nil {
-		logger = log.NewNopLogger()
+func newRegistry(log *logger.Logger) *registry {
+	if log == nil {
+		log = logger.NewLogger(false)
 	}
 
 	return &registry{
 		items:  make(map[id.ID]*RegistryItem),
 		hosts:  make(map[string]*hostInfo),
-		logger: logger,
+		logger: log,
 	}
 }
 
@@ -56,11 +56,7 @@ func (r *registry) Subscribe(identifier id.ID) {
 		return
 	}
 
-	r.logger.Log(
-		"level", 1,
-		"action", "subscribe",
-		"identifier", identifier,
-	)
+	r.logger.Infof("subscribe, identifier: %s", identifier)
 
 	r.items[identifier] = voidRegistryItem
 }
@@ -96,11 +92,7 @@ func (r *registry) Unsubscribe(identifier id.ID) *RegistryItem {
 		return nil
 	}
 
-	r.logger.Log(
-		"level", 1,
-		"action", "unsubscribe",
-		"identifier", identifier,
-	)
+	r.logger.Infof("unsubscribe, identifier: %s", identifier)
 
 	if i.Hosts != nil {
 		for _, h := range i.Hosts {
@@ -114,11 +106,7 @@ func (r *registry) Unsubscribe(identifier id.ID) *RegistryItem {
 }
 
 func (r *registry) set(i *RegistryItem, identifier id.ID) error {
-	r.logger.Log(
-		"level", 2,
-		"action", "set registry item",
-		"identifier", identifier,
-	)
+	r.logger.Debugf("set registry item, identifier: %s", identifier)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -155,11 +143,7 @@ func (r *registry) set(i *RegistryItem, identifier id.ID) error {
 }
 
 func (r *registry) clear(identifier id.ID) *RegistryItem {
-	r.logger.Log(
-		"level", 2,
-		"action", "clear registry item",
-		"identifier", identifier,
-	)
+	r.logger.Debugf("clear registry item, identifier: %s", identifier)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()

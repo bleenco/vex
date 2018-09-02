@@ -5,7 +5,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/bleenco/vex/log"
+	"github.com/bleenco/vex/logger"
 	"github.com/bleenco/vex/proto"
 )
 
@@ -21,32 +21,32 @@ type TCPProxy struct {
 	// * host
 	localAddrMap map[string]string
 	// logger is the proxy logger.
-	logger log.Logger
+	logger *logger.Logger
 }
 
 // NewTCPProxy creates new direct TCPProxy, everything will be proxied to
 // localAddr.
-func NewTCPProxy(localAddr string, logger log.Logger) *TCPProxy {
-	if logger == nil {
-		logger = log.NewNopLogger()
+func NewTCPProxy(localAddr string, log *logger.Logger) *TCPProxy {
+	if log == nil {
+		log = logger.NewLogger(false)
 	}
 
 	return &TCPProxy{
 		localAddr: localAddr,
-		logger:    logger,
+		logger:    log,
 	}
 }
 
 // NewMultiTCPProxy creates a new dispatching TCPProxy, connections may go to
 // different backends based on localAddrMap.
-func NewMultiTCPProxy(localAddrMap map[string]string, logger log.Logger) *TCPProxy {
-	if logger == nil {
-		logger = log.NewNopLogger()
+func NewMultiTCPProxy(localAddrMap map[string]string, log *logger.Logger) *TCPProxy {
+	if log == nil {
+		log = logger.NewLogger(false)
 	}
 
 	return &TCPProxy{
 		localAddrMap: localAddrMap,
-		logger:       logger,
+		logger:       log,
 	}
 }
 
@@ -54,62 +54,36 @@ func NewMultiTCPProxy(localAddrMap map[string]string, logger log.Logger) *TCPPro
 func (p *TCPProxy) Proxy(w io.Writer, r io.ReadCloser, msg *proto.ControlMessage) {
 	switch msg.ForwardedProto {
 	case proto.TCP, proto.TCP4, proto.TCP6, proto.UNIX:
-		// ok
+	// ok
 	default:
-		p.logger.Log(
-			"level", 0,
-			"msg", "unsupported protocol",
-			"ctrlMsg", msg,
-		)
+		p.logger.Errorf("tcp proxy: unsupported protocol, control message: %s", msg)
 		return
 	}
 
 	target := p.localAddrFor(msg.ForwardedHost)
 	if target == "" {
-		p.logger.Log(
-			"level", 1,
-			"msg", "no target",
-			"ctrlMsg", msg,
-		)
+		p.logger.Errorf("tcp proxy: no target, control message: %s", msg)
 		return
 	}
 
 	local, err := net.DialTimeout("tcp", target, DefaultTimeout)
 	if err != nil {
-		p.logger.Log(
-			"level", 0,
-			"msg", "dial failed",
-			"target", target,
-			"ctrlMsg", msg,
-			"err", err,
-		)
+		p.logger.Errorf("tcp proxy: dial failed, target: %s, control message: %s, reason: %s", target, msg, err)
 		return
 	}
 	defer local.Close()
 
 	if err := keepAlive(local); err != nil {
-		p.logger.Log(
-			"level", 1,
-			"msg", "TCP keepalive for tunneled connection failed",
-			"target", target,
-			"ctrlMsg", msg,
-			"err", err,
-		)
+		p.logger.Errorf("tcp proxy: TCP keepalive for tunneled connection failed, target: %s, control message: %s, err: %s", target, msg, err)
 	}
 
 	done := make(chan struct{})
 	go func() {
-		transfer(flushWriter{w}, local, log.NewContext(p.logger).With(
-			"dst", msg.ForwardedHost,
-			"src", target,
-		))
+		transfer(flushWriter{w}, local, p.logger)
 		close(done)
 	}()
 
-	transfer(local, r, log.NewContext(p.logger).With(
-		"dst", target,
-		"src", msg.ForwardedHost,
-	))
+	transfer(local, r, p.logger)
 
 	<-done
 }
