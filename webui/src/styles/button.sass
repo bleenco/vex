@@ -1,0 +1,62 @@
+.button
+  color: $text-primary
+  border-radius: 3px
+  border: 1px solid $border-secondary
+  padding: 9px 16px
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  font-size: 13px
+  font-family: $font-family-medium
+  outline: none
+  cursor: pointer
+  background: $white
+
+  &[disabled]
+    opacity: .5
+    pointer-events: none
+    touch-action: none
+
+  &:not(:last-child)
+    margin-right: 5px
+
+  &:hover, &.is-active
+    border-color: $border-button
+
+  &.is-small
+    padding: 7px 15px
+    font-size: 12px
+
+  &.is-large
+    padding: 10px 30px
+
+  &.is-red
+    color: $red
+    border-color: $red
+
+    &:hover, &.is-active
+      background: $red
+      color: $white
+
+  &.is-blue
+    color: $blue
+    border-color: $blue
+
+    &:hover, &.is-active
+      background: $blue
+      color: $white
+
+  &.is-green
+    color: $green
+    border-color: $green
+
+    &:hover, &.is-active
+      background: $green
+      color: $white
+
+  i
+    margin-right: 5px
+
+  img
+    width: 16px
+    height: 16px

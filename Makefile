@@ -2,6 +2,7 @@ all: build
 
 build:
 	@mkdir -p build
+	@if [ ! -d statik ]; then make build_ui; fi
 	@make build_client
 	@make build_server
 
@@ -13,12 +14,11 @@ build_server:
 	@mkdir -p build
 	@go build -o build/vexd cmd/vexd/*.go
 
-clean:
-	@rm -rf build
+build_ui:
+	@cd webui/ && npm run build
+	@statik -src=./dist
 
-certs:
-	@mkdir -p build
-	openssl req -x509 -nodes -newkey rsa:2048 -sha256 -keyout build/client.key -out build/client.crt
-	openssl req -x509 -nodes -newkey rsa:2048 -sha256 -keyout build/server.key -out build/server.crt
+clean:
+	@rm -rf build statik dist
 
 .PHONY: clean build

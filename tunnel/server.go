@@ -9,12 +9,20 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path"
 	"strings"
 	"time"
+
+	"github.com/gobwas/ws"
+	"github.com/gobwas/ws/wsutil"
 
 	"github.com/bleenco/vex/id"
 	"github.com/bleenco/vex/logger"
 	"github.com/bleenco/vex/proto"
+	_ "github.com/bleenco/vex/statik" // dashboard UI static files
+
+	"github.com/rakyll/statik/fs"
 	"golang.org/x/net/http2"
 )
 
@@ -46,6 +54,7 @@ type Server struct {
 	listener   net.Listener
 	connPool   *connPool
 	httpClient *http.Client
+	fs         http.FileSystem
 	logger     *logger.Logger
 }
 
@@ -61,10 +70,16 @@ func NewServer(config *ServerConfig) (*Server, error) {
 		log = logger.NewLogger(false)
 	}
 
+	statikFS, err := fs.New()
+	if err != nil {
+		return nil, err
+	}
+
 	s := &Server{
 		registry: newRegistry(log),
 		config:   config,
 		listener: listener,
+		fs:       statikFS,
 		logger:   log,
 	}
 
@@ -364,13 +379,29 @@ func (s *Server) listen(l net.Listener, identifier id.ID) {
 // ServeHTTP proxies http connection to the client.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Host == s.config.Domain {
-		type response struct {
-			Message string `json:"message"`
-		}
+		if r.URL.String() == "/ws" {
+			conn, _, _, err := ws.UpgradeHTTP(r, w)
+			if err != nil {
+				// handle error
+			}
 
-		resp := response{Message: "dashboard"}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp)
+			go func() {
+				defer conn.Close()
+
+				for {
+					msg, op, err := wsutil.ReadClientData(conn)
+					if err != nil {
+						return
+					}
+					err = wsutil.WriteServerMessage(conn, op, msg)
+					if err != nil {
+						return
+					}
+				}
+			}()
+		} else {
+			http.FileServer(&routerWrapper{s.fs}).ServeHTTP(w, r)
+		}
 	} else {
 		resp, err := s.RoundTrip(r)
 		if err == errUnauthorised {
@@ -541,4 +572,17 @@ func (s *Server) Stop() {
 	if s.listener != nil {
 		s.listener.Close()
 	}
+}
+
+type routerWrapper struct {
+	assets http.FileSystem
+}
+
+func (r *routerWrapper) Open(name string) (http.File, error) {
+	ret, err := r.assets.Open(name)
+	if !os.IsNotExist(err) || path.Ext(name) != "" {
+		return ret, err
+	}
+
+	return r.assets.Open("/index.html")
 }

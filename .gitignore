@@ -1,3 +1,5 @@
 build/
+dist/
+statik/
 .DS_Store
 
