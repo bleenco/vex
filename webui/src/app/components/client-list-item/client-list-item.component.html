@@ -1,0 +1,16 @@
+<div class="list-item">
+  <div class="columns is-marginless is-paddingless">
+    <div class="column is-6 is-marginless is-paddingless data-column">
+      <span class="heading-text">Client ID</span>
+      <span class="data-text">{{ client?.id }}</span>
+    </div>
+    <div class="column is-3 is-marginless is-paddingless data-column">
+      <span class="heading-text">Hosts</span>
+      <span class="data-text">{{ client?.getHosts() }}</span>
+    </div>
+    <div class="column is-3 is-marginless is-paddingless buttons-column justify-end">
+      <button type="button" class="button is-small w70">Delete</button>
+      <button type="button" class="button is-small w70">Edit</button>
+    </div>
+  </div>
+</div>

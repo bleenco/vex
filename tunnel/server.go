@@ -14,8 +14,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
+
+	"github.com/gobwas/ws"
 
 	"github.com/bleenco/vex/id"
 	"github.com/bleenco/vex/logger"
@@ -45,6 +46,10 @@ type ServerConfig struct {
 	Logger *logger.Logger
 }
 
+type wsClient struct {
+	net.Conn
+}
+
 // Server is responsible for proxying public connections to the client over a
 // tunnel connection.
 type Server struct {
@@ -55,6 +60,7 @@ type Server struct {
 	connPool   *connPool
 	httpClient *http.Client
 	fs         http.FileSystem
+	wsClients  []*wsClient
 	logger     *logger.Logger
 }
 
@@ -76,11 +82,12 @@ func NewServer(config *ServerConfig) (*Server, error) {
 	}
 
 	s := &Server{
-		registry: newRegistry(log),
-		config:   config,
-		listener: listener,
-		fs:       statikFS,
-		logger:   log,
+		registry:  newRegistry(log),
+		config:    config,
+		listener:  listener,
+		fs:        statikFS,
+		wsClients: make([]*wsClient, 0),
+		logger:    log,
 	}
 
 	t := &http2.Transport{}
@@ -125,6 +132,8 @@ func (s *Server) disconnected(identifier id.ID) {
 		s.logger.Debugf("close listener, identifier: %s, addr: %s", identifier, l.Addr())
 		l.Close()
 	}
+
+	s.emitRegistryClients()
 }
 
 // Start starts accepting connections form clients. For accepting http traffic
@@ -249,6 +258,8 @@ func (s *Server) handleClient(conn net.Conn) {
 	}
 
 	log.Infof("connected")
+
+	s.emitRegistryClients()
 
 	return
 
@@ -382,23 +393,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if r.URL.String() == "/ws" {
 			conn, _, _, err := ws.UpgradeHTTP(r, w)
 			if err != nil {
-				// handle error
+				return
 			}
 
-			go func() {
-				defer conn.Close()
-
-				for {
-					msg, op, err := wsutil.ReadClientData(conn)
-					if err != nil {
-						return
-					}
-					err = wsutil.WriteServerMessage(conn, op, msg)
-					if err != nil {
-						return
-					}
-				}
-			}()
+			go s.handleWebsocketClient(conn)
 		} else {
 			http.FileServer(&routerWrapper{s.fs}).ServeHTTP(w, r)
 		}
@@ -571,6 +569,81 @@ func (s *Server) Stop() {
 
 	if s.listener != nil {
 		s.listener.Close()
+	}
+}
+
+func (s *Server) handleWebsocketClient(conn net.Conn) {
+	client := &wsClient{conn}
+	s.wsClients = append(s.wsClients, client)
+	s.logger.Infof("websocket client connected")
+
+	defer s.unsubscribeWebsocketClient(client)
+
+	for {
+		msg, _, err := wsutil.ReadClientData(client.Conn)
+		if err != nil {
+			return
+		}
+
+		fmt.Println(string(msg))
+	}
+
+	// go func() {
+	// 	defer conn.Close()
+
+	// 	for {
+	// 		msg, op, err := wsutil.ReadClientData(conn)
+	// 		if err != nil {
+	// 			return
+	// 		}
+	// 		err = wsutil.WriteServerMessage(conn, op, msg)
+	// 		if err != nil {
+	// 			return
+	// 		}
+	// 	}
+	// }()
+}
+
+func (s *Server) unsubscribeWebsocketClient(client *wsClient) {
+	defer client.Conn.Close()
+
+	for i := len(s.wsClients) - 1; i >= 0; i-- {
+		if s.wsClients[i] == client {
+			s.wsClients = append(s.wsClients[:i], s.wsClients[i+1:]...)
+		}
+	}
+
+	s.logger.Infof("websocket client disconnected")
+}
+
+type registryClient struct {
+	Identifier string   `json:"id"`
+	Hosts      []string `json:"hosts"`
+}
+
+type registryClientMessage struct {
+	Type string            `json:"type"`
+	Data []*registryClient `json:"data"`
+}
+
+func (s *Server) emitRegistryClients() {
+	var clients []*registryClient
+
+	for id, c := range s.registry.items {
+		client := &registryClient{Identifier: id.String()}
+		for _, host := range c.Hosts {
+			client.Hosts = append(client.Hosts, host.Host)
+		}
+		clients = append(clients, client)
+	}
+
+	msg, err := json.Marshal(&registryClientMessage{Type: "clients", Data: clients})
+	if err != nil {
+		return
+	}
+
+	for _, wsclient := range s.wsClients {
+		wsutil.WriteServerMessage(wsclient.Conn, ws.OpText, msg)
 	}
 }
 

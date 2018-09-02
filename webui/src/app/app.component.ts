@@ -1,19 +1,19 @@
-import { Component, OnInit } from '@angular/core';
-import { SocketService } from './providers/socket.service';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import { DataService } from './shared/data.service';
 
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html'
 })
-export class AppComponent implements OnInit {
+export class AppComponent implements OnInit, OnDestroy {
 
-  constructor(public socket: SocketService) {}
+  constructor(public data: DataService) {}
 
   ngOnInit() {
-    this.socket.onMessage().subscribe(event => {
-      console.log(event);
-    });
+    this.data.initSocketEvents();
+  }
 
-    this.socket.emit({ message: 'Serbus!' });
+  ngOnDestroy() {
+    this.data.deinitSocketEvents();
   }
 }

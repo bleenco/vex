@@ -1,0 +1,11 @@
+<div class="columns is-multiline">
+  <div class="column is-12">
+    <div class="columns is-multiline">
+      <div class="column is-12">
+        <div *ngFor="let client of data?.clients">
+          <app-client-list-item [client]="client" *ngIf="client.hosts.length"></app-client-list-item>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
