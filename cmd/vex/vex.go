@@ -8,88 +8,77 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"sort"
 
-	"gopkg.in/yaml.v2"
-
-	"github.com/bleenco/vex/id"
+	"github.com/bleenco/vex/certgen"
 	"github.com/bleenco/vex/log"
 	"github.com/bleenco/vex/proto"
 	"github.com/bleenco/vex/tunnel"
+
 	"github.com/cenkalti/backoff"
+	kingpin "gopkg.in/alecthomas/kingpin.v2"
+)
+
+var (
+	addr       = kingpin.Flag("addr", "Remote address").Short('a').Default("0.0.0.0:8080").String()
+	host       = kingpin.Flag("host", "Hostname").Short('h').Default("test.bleenco.space").String()
+	protocol   = kingpin.Flag("protocol", "Protocol to use, http or tcp").Short('p').Default("http").Enum("http", "tcp")
+	serverAddr = kingpin.Flag("serverAddr", "Remote server address").Short('s').Default("bleenco.space:5223").String()
 )
 
 func main() {
-	opts, err := parseArgs()
-	if err != nil {
-		fatal(err.Error())
+	kingpin.UsageTemplate(kingpin.CompactUsageTemplate).Version("0.1.0").Author("Bleenco GmbH")
+	kingpin.Parse()
+
+	logger := log.NewFilterLogger(log.NewStdLogger(), 1)
+
+	certPath, keyPath := certgen.CheckAndGenerateCert()
+
+	config := ClientConfig{
+		TLSCrt: certPath,
+		TLSKey: keyPath,
+		Backoff: BackoffConfig{
+			Interval:    DefaultBackoffInterval,
+			Multiplier:  DefaultBackoffMultiplier,
+			MaxInterval: DefaultBackoffMaxInterval,
+			MaxTime:     DefaultBackoffMaxTime,
+		},
+		Tunnels: make(map[string]*Tunnel),
 	}
 
-	if opts.version {
-		fmt.Println(version)
-		return
+	var err error
+
+	if config.ServerAddr, err = normalizeAddress(*serverAddr); err != nil {
+		fmt.Fprintf(os.Stderr, "Server address: %s: %v", config.ServerAddr, err)
+		os.Exit(1)
 	}
 
-	logger := log.NewFilterLogger(log.NewStdLogger(), opts.logLevel)
-
-	// read configuration file
-	config, err := loadClientConfigFromFile(opts.config)
-	if err != nil {
-		fatal("configuration error: %s", err)
+	t := &Tunnel{
+		Protocol: *protocol,
+		Host:     *host,
+		Addr:     *addr,
 	}
 
-	switch opts.command {
-	case "id":
-		cert, err := tls.LoadX509KeyPair(config.TLSCrt, config.TLSKey)
-		if err != nil {
-			fatal("failed to load key pair: %s", err)
+	switch t.Protocol {
+	case proto.HTTP:
+		if err := validateHTTP(t); err != nil {
+			fmt.Fprintf(os.Stderr, "%s", err)
+			os.Exit(1)
 		}
-		x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
-		if err != nil {
-			fatal("failed to parse certificate: %s", err)
-		}
-		fmt.Println(id.New(x509Cert.Raw))
-
-		return
-	case "list":
-		var names []string
-		for n := range config.Tunnels {
-			names = append(names, n)
-		}
-
-		sort.Strings(names)
-
-		for _, n := range names {
-			fmt.Println(n)
-		}
-
-		return
-	case "start":
-		tunnels := make(map[string]*Tunnel)
-		for _, arg := range opts.args {
-			t, ok := config.Tunnels[arg]
-			if !ok {
-				fatal("no such tunnel %q", arg)
+	case proto.TCP, proto.TCP4, proto.TCP6:
+		{
+			if err := validateTCP(t); err != nil {
+				fmt.Fprintf(os.Stderr, "%s", err)
+				os.Exit(1)
 			}
-			tunnels[arg] = t
 		}
-		config.Tunnels = tunnels
 	}
 
-	if len(config.Tunnels) == 0 {
-		fatal("no tunnels")
-	}
+	config.Tunnels["default"] = t
 
-	tlsconf, err := tlsConfig(config)
+	tlsconf, err := tlsConfig(&config)
 	if err != nil {
 		fatal("failed to configure tls: %s", err)
 	}
-
-	b, err := yaml.Marshal(config)
-	if err != nil {
-		fatal("failed to dump config: %s", err)
-	}
-	logger.Log("config", string(b))
 
 	client, err := tunnel.NewClient(&tunnel.ClientConfig{
 		ServerAddr:      config.ServerAddr,
@@ -106,6 +95,8 @@ func main() {
 	if err := client.Start(); err != nil {
 		fatal("failed to start tunnels: %s", err)
 	}
+
+	os.Exit(0)
 }
 
 func tlsConfig(config *ClientConfig) (*tls.Config, error) {

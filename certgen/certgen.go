@@ -16,11 +16,13 @@ import (
 
 // CheckAndGenerateCert checks if clients certificate exists and if not
 // generates a new self-signed X.509 certificate for a TLS connections.
-func CheckAndGenerateCert() {
+func CheckAndGenerateCert() (string, string) {
+	certPath, keyPath := getClientCertPaths()
 	if !checkClientCertificate() {
-		certPath, keyPath := getClientCertPaths()
 		generateCertAndKey(certPath, keyPath)
 	}
+
+	return certPath, keyPath
 }
 
 func generateCertAndKey(certPath, keyPath string) {
