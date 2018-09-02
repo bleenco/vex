@@ -34,20 +34,32 @@
   version = "2.0.0"
 
 [[constraint]]
+  name = "github.com/fatih/color"
+  version = "1.7.0"
+
+[[constraint]]
   branch = "master"
   name = "github.com/felixge/tcpkeepalive"
 
 [[constraint]]
-  name = "github.com/golang/mock"
-  version = "1.1.1"
+  name = "github.com/gobwas/ws"
+  version = "1.0.0"
 
 [[constraint]]
-  name = "github.com/mmatczuk/go-http-tunnel"
-  version = "2.1.0"
+  name = "github.com/mitchellh/go-homedir"
+  version = "1.0.0"
+
+[[constraint]]
+  name = "github.com/rakyll/statik"
+  version = "0.1.4"
 
 [[constraint]]
   branch = "master"
   name = "golang.org/x/net"
+
+[[constraint]]
+  name = "gopkg.in/alecthomas/kingpin.v2"
+  version = "2.2.6"
 
 [[constraint]]
   name = "gopkg.in/yaml.v2"

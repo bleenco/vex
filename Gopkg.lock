@@ -2,6 +2,25 @@
 
 
 [[projects]]
+  branch = "master"
+  digest = "1:315c5f2f60c76d89b871c73f9bd5fe689cad96597afd50fb9992228ef80bdd34"
+  name = "github.com/alecthomas/template"
+  packages = [
+    ".",
+    "parse",
+  ]
+  pruneopts = "UT"
+  revision = "a0175ee3bccc567396460bf5acd36800cb10c49c"
+
+[[projects]]
+  branch = "master"
+  digest = "1:c198fdc381e898e8fb62b8eb62758195091c313ad18e52a3067366e1dda2fb3c"
+  name = "github.com/alecthomas/units"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "2efee857e7cfd4f3d0138cc3cbb1b4966962b93a"
+
+[[projects]]
   digest = "1:28a8bbc0082dd9c30ff36deeeb8f8a6b579cbccf4e00765317929c88529b898e"
   name = "github.com/calmh/luhn"
   packages = ["."]
@@ -18,6 +37,14 @@
   version = "v2.0.0"
 
 [[projects]]
+  digest = "1:865079840386857c809b72ce300be7580cb50d3d3129ce11bf9aa6ca2bc1934a"
+  name = "github.com/fatih/color"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "5b77d2a35fb0ede96d138fc9a99f5c9b6aef11b4"
+  version = "v1.7.0"
+
+[[projects]]
   branch = "master"
   digest = "1:50cf302cc52eb618cec25d4daf167ed5593145d43b447b906a9f0d24e271d48b"
   name = "github.com/felixge/tcpkeepalive"
@@ -26,20 +53,68 @@
   revision = "5bb0b2dea91e0de550022159b9571aafc72c08ba"
 
 [[projects]]
-  digest = "1:bc38c7c481812e178d85160472e231c5e1c9a7f5845d67e23ee4e706933c10d8"
-  name = "github.com/golang/mock"
-  packages = ["gomock"]
+  branch = "master"
+  digest = "1:368ba96ddacaae2fe265afcac3062a199908f7dc0c6569d6e05a7a13042cccf1"
+  name = "github.com/gobwas/httphead"
+  packages = ["."]
   pruneopts = "UT"
-  revision = "c34cdb4725f4c3844d095133c6e40e448b86589b"
-  version = "v1.1.1"
+  revision = "2c6c146eadee0b69f856f87e3e9f1d0cd6aad2f5"
 
 [[projects]]
-  digest = "1:fd007369384733432e6454c928d077ec9b809eef23b241ee0f59c3067d4516c2"
-  name = "github.com/mmatczuk/go-http-tunnel"
-  packages = ["tunnelmock"]
+  digest = "1:bdfe3b97ff03e4f7252c74cfaefb20050a360c8fb760701014ebf99c9540abd1"
+  name = "github.com/gobwas/pool"
+  packages = [
+    ".",
+    "internal/pmath",
+    "pbufio",
+    "pbytes",
+  ]
   pruneopts = "UT"
-  revision = "75a30abccc8db9d1149845e9985e80cca57758a2"
-  version = "2.1"
+  revision = "fa3125c39d7eca32e1387bb69b1b38dcb31b1e0b"
+  version = "v0.2.0"
+
+[[projects]]
+  digest = "1:0170d57f475b654098594498fbd9c94a57464b91d6dd855fe409d87656d4aa5e"
+  name = "github.com/gobwas/ws"
+  packages = [
+    ".",
+    "wsutil",
+  ]
+  pruneopts = "UT"
+  revision = "469ccd6afe52b489eee1e662098562dd7d77a4f8"
+  version = "v1.0.0"
+
+[[projects]]
+  digest = "1:c658e84ad3916da105a761660dcaeb01e63416c8ec7bc62256a9b411a05fcd67"
+  name = "github.com/mattn/go-colorable"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "167de6bfdfba052fa6b2d3664c8f5272e23c9072"
+  version = "v0.0.9"
+
+[[projects]]
+  digest = "1:0981502f9816113c9c8c4ac301583841855c8cf4da8c72f696b3ebedf6d0e4e5"
+  name = "github.com/mattn/go-isatty"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "6ca4dbf54d38eea1a992b3c722a76a5d1c4cb25c"
+  version = "v0.0.4"
+
+[[projects]]
+  digest = "1:78bbb1ba5b7c3f2ed0ea1eab57bdd3859aec7e177811563edc41198a760b06af"
+  name = "github.com/mitchellh/go-homedir"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "ae18d6b8b3205b561c79e8e5f69bff09736185f4"
+  version = "v1.0.0"
+
+[[projects]]
+  digest = "1:ea0700160aca4ef099f4e06686a665a87691f4248dddd40796925eda2e46bd64"
+  name = "github.com/rakyll/statik"
+  packages = ["fs"]
+  pruneopts = "UT"
+  revision = "aa8a7b1baecd0f31a436bf7956fcdcc609a83035"
+  version = "v0.1.4"
 
 [[projects]]
   branch = "master"
@@ -54,6 +129,14 @@
   ]
   pruneopts = "UT"
   revision = "8a410e7b638dca158bf9e766925842f6651ff828"
+
+[[projects]]
+  branch = "master"
+  digest = "1:4b487c782bc804d994e91adbd3d2a8a77a482671efd87b2fde0805adb01a39c0"
+  name = "golang.org/x/sys"
+  packages = ["unix"]
+  pruneopts = "UT"
+  revision = "fa5fdf94c78965f1aa8423f0cc50b8b8d728b05a"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"
@@ -79,6 +162,14 @@
   version = "v0.3.0"
 
 [[projects]]
+  digest = "1:c06d9e11d955af78ac3bbb26bd02e01d2f61f689e1a3bce2ef6fb683ef8a7f2d"
+  name = "gopkg.in/alecthomas/kingpin.v2"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "947dcec5ba9c011838740e680966fd7087a71d0d"
+  version = "v2.2.6"
+
+[[projects]]
   digest = "1:342378ac4dcb378a5448dd723f0784ae519383532f5e70ade24132c4c8693202"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
@@ -92,10 +183,14 @@
   input-imports = [
     "github.com/calmh/luhn",
     "github.com/cenkalti/backoff",
+    "github.com/fatih/color",
     "github.com/felixge/tcpkeepalive",
-    "github.com/golang/mock/gomock",
-    "github.com/mmatczuk/go-http-tunnel/tunnelmock",
+    "github.com/gobwas/ws",
+    "github.com/gobwas/ws/wsutil",
+    "github.com/mitchellh/go-homedir",
+    "github.com/rakyll/statik/fs",
     "golang.org/x/net/http2",
+    "gopkg.in/alecthomas/kingpin.v2",
     "gopkg.in/yaml.v2",
   ]
   solver-name = "gps-cdcl"
