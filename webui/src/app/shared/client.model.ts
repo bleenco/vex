@@ -10,6 +10,6 @@ export class Client {
   }
 
   getHosts(): string {
-    return this.hosts.join(', ');
+    return this.hosts.join(', ') || 'N/A';
   }
 }

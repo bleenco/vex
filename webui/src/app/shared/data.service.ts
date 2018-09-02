@@ -27,6 +27,10 @@ export class DataService {
   }
 
   private setClients(clients: any[]): void {
+    if (!clients || !clients.length) {
+      return;
+    }
+
     clients.forEach(c => {
       const client = this.clients.find(cl => c.id === cl.id);
       if (client) {

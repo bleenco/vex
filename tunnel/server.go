@@ -133,7 +133,7 @@ func (s *Server) disconnected(identifier id.ID) {
 		l.Close()
 	}
 
-	s.emitRegistryClients()
+	s.emitRegistryClients(nil)
 }
 
 // Start starts accepting connections form clients. For accepting http traffic
@@ -259,7 +259,7 @@ func (s *Server) handleClient(conn net.Conn) {
 
 	log.Infof("connected")
 
-	s.emitRegistryClients()
+	s.emitRegistryClients(nil)
 
 	return
 
@@ -577,6 +577,8 @@ func (s *Server) handleWebsocketClient(conn net.Conn) {
 	s.wsClients = append(s.wsClients, client)
 	s.logger.Infof("websocket client connected")
 
+	s.emitRegistryClients(client)
+
 	defer s.unsubscribeWebsocketClient(client)
 
 	for {
@@ -587,21 +589,6 @@ func (s *Server) handleWebsocketClient(conn net.Conn) {
 
 		fmt.Println(string(msg))
 	}
-
-	// go func() {
-	// 	defer conn.Close()
-
-	// 	for {
-	// 		msg, op, err := wsutil.ReadClientData(conn)
-	// 		if err != nil {
-	// 			return
-	// 		}
-	// 		err = wsutil.WriteServerMessage(conn, op, msg)
-	// 		if err != nil {
-	// 			return
-	// 		}
-	// 	}
-	// }()
 }
 
 func (s *Server) unsubscribeWebsocketClient(client *wsClient) {
@@ -626,7 +613,7 @@ type registryClientMessage struct {
 	Data []*registryClient `json:"data"`
 }
 
-func (s *Server) emitRegistryClients() {
+func (s *Server) emitRegistryClients(toClient *wsClient) {
 	var clients []*registryClient
 
 	for id, c := range s.registry.items {
@@ -642,8 +629,12 @@ func (s *Server) emitRegistryClients() {
 		return
 	}
 
-	for _, wsclient := range s.wsClients {
-		wsutil.WriteServerMessage(wsclient.Conn, ws.OpText, msg)
+	if toClient != nil {
+		wsutil.WriteServerMessage(toClient.Conn, ws.OpText, msg)
+	} else {
+		for _, wsclient := range s.wsClients {
+			wsutil.WriteServerMessage(wsclient.Conn, ws.OpText, msg)
+		}
 	}
 }
 
