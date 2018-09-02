@@ -35,6 +35,7 @@ func main() {
 	// setup server
 	server, err := tunnel.NewServer(&tunnel.ServerConfig{
 		Addr:          opts.tunnelAddr,
+		Domain:        opts.domain,
 		AutoSubscribe: autoSubscribe,
 		TLSConfig:     tlsconf,
 		Logger:        log,

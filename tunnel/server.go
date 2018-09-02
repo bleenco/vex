@@ -23,6 +23,8 @@ type ServerConfig struct {
 	// Addr is TCP address to listen for client connections. If empty ":0"
 	// is used.
 	Addr string
+	// Domain specifies the root domain where server is hosted.
+	Domain string
 	// AutoSubscribe if enabled will automatically subscribe new clients on
 	// first call.
 	AutoSubscribe bool
@@ -361,24 +363,34 @@ func (s *Server) listen(l net.Listener, identifier id.ID) {
 
 // ServeHTTP proxies http connection to the client.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	resp, err := s.RoundTrip(r)
-	if err == errUnauthorised {
-		w.Header().Set("WWW-Authenticate", "Basic realm=\"User Visible Realm\"")
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
+	if r.Host == s.config.Domain {
+		type response struct {
+			Message string `json:"message"`
+		}
+
+		resp := response{Message: "dashboard"}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	} else {
+		resp, err := s.RoundTrip(r)
+		if err == errUnauthorised {
+			w.Header().Set("WWW-Authenticate", "Basic realm=\"User Visible Realm\"")
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+		if err != nil {
+			s.logger.Errorf("round trip failed, addr: %s, host: %s, url: %s, err: %v", r.RemoteAddr, r.Host, r.URL, err)
+
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		defer resp.Body.Close()
+
+		copyHeader(w.Header(), resp.Header)
+		w.WriteHeader(resp.StatusCode)
+
+		transfer(w, resp.Body, logger.NewLoggerWithPrefix("dir: client to user, dst: "+r.RemoteAddr+" src: "+r.Host, s.logger.Debug))
 	}
-	if err != nil {
-		s.logger.Errorf("round trip failed, addr: %s, host: %s, url: %s, err: %v", r.RemoteAddr, r.Host, r.URL, err)
-
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	copyHeader(w.Header(), resp.Header)
-	w.WriteHeader(resp.StatusCode)
-
-	transfer(w, resp.Body, logger.NewLoggerWithPrefix("dir: client to user, dst: "+r.RemoteAddr+" src: "+r.Host, s.logger.Debug))
 }
 
 // RoundTrip is http.RoundTriper implementation.
